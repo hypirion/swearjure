@@ -1,7 +1,11 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 
-module Swearjure.Parser where
+module Swearjure.Parser
+       ( ParseVal(..)
+       , PVal
+       , readAst
+       ) where
 
 import Control.Applicative hiding (many, (<|>))
 import Control.Monad.Except
@@ -12,13 +16,14 @@ import Data.Traversable (Traversable)
 import Swearjure.Errors
 import Text.ParserCombinators.Parsec
 
-data ParseVal p = PSym String
+data ParseVal p = PSym String -- qualified syms. Gur
                 | PString String
                 | PKw String
                 | PQualKw String
                 | PChar Char
                 | PList [p]
                 | PVec [p]
+                | PSet [p] -- Sharpie!
                 | PHM [(p, p)]
                 deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
@@ -61,10 +66,10 @@ lexeme p = do x <- p
 
 -- fixme: These are.. nasty to do properly.
 startSymChar :: Parser Char
-startSymChar = oneOf "+-*/!=<>?"
+startSymChar = oneOf "+-*/!=<>?_&$%"
 
 symChar :: Parser Char
-symChar = startSymChar
+symChar = startSymChar <|> oneOf "#'"
 
 symString :: Parser String
 symString = do x <- startSymChar
@@ -138,10 +143,13 @@ unquote = do omit $ char '~'
 -- sharpies be here
 
 sharp :: Parser PVal
-sharp = char '#' >> sharpQuote
+sharp = char '#' >> (sharpQuote <|> set)
 
 sharpQuote :: Parser PVal
 sharpQuote = sugared '\'' "var"
+
+set :: Parser PVal
+set = Fix . PSet <$> delimited '{' '}' (many expr)
 
 -- are there more? More non-whitespacey, that is.
 
@@ -149,8 +157,8 @@ expr :: Parser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
        <|> quote <|> backquote <|> deref <|> unquote <|> sharp
 
-readExpr :: String -> Either SwjError (Maybe PVal)
-readExpr s = throwLeftMap SyntaxError $
-             parse (whiteSpace >> optionMaybe expr) "" s
+readAst :: String -> Either SwjError (Maybe PVal)
+readAst s = throwLeftMap SyntaxError $
+             parse (whiteSpace >> optionMaybe expr <* eof) "" s
   where throwLeftMap f (Left x) = throwError (f x)
         throwLeftMap _ (Right x) = return x

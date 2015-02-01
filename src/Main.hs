@@ -1,10 +1,11 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
 
+import Control.Exception
+import Swearjure.Errors
+import Swearjure.Reader
+import Swearjure.AST (prStr)
 import System.IO
 import System.IO.Error
-import Control.Exception
-import Swearjure.Parser (readExpr)
-import Swearjure.Errors
 
 main :: IO ()
 main = do putStr "swj> "
@@ -24,6 +25,5 @@ main = do putStr "swj> "
 rep :: String -> Maybe String
 rep s = case readExpr s of
          Left err -> Just $ errString err
-         Right (Just ast) -> Just $ show ast
+         Right (Just ast) -> Just $ prStr ast
          Right Nothing -> Nothing
-
