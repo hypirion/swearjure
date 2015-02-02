@@ -21,6 +21,7 @@ data ParseVal p = PSym String -- qualified syms. Gur
                 | PKw String
                 | PQualKw String
                 | PChar Char
+                | PFnLit [p]
                 | PList [p]
                 | PVec [p]
                 | PSet [p] -- Sharpie!
@@ -143,10 +144,13 @@ unquote = do omit $ char '~'
 -- sharpies be here
 
 sharp :: Parser PVal
-sharp = char '#' >> (sharpQuote <|> set)
+sharp = char '#' >> (sharpQuote <|> set <|> fnLit)
 
 sharpQuote :: Parser PVal
 sharpQuote = sugared '\'' "var"
+
+fnLit :: Parser PVal
+fnLit = Fix . PFnLit <$> delimited '(' ')' (many expr)
 
 set :: Parser PVal
 set = Fix . PSet <$> delimited '{' '}' (many expr)

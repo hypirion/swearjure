@@ -21,6 +21,7 @@ convertAst (Just ast) = (return . Just . cata (Fix . go)) ast
         -- -^ if we could move nses, this would've forced this fn to be of
         -- EvalState
         go (PChar c) = EChar c
+        go (PFnLit xs) = EFnLit xs -- TODO: Not proper.
         go (PList xs) = EList xs
         go (PVec xs) = EVec xs
         go (PSet xs) = ESet xs
