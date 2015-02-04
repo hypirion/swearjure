@@ -152,7 +152,14 @@ sharpQuote :: SwjParser PVal
 sharpQuote = sugared '\'' "var"
 
 fnLit :: SwjParser PVal
-fnLit = Fix . PFnLit <$> delimited '(' ')' (many expr)
+fnLit = do omit $ char '('
+           insideFnLit <- getState
+           when insideFnLit $ fail "Nested #() are not allowed"
+           setState True
+           exps <- many expr
+           omit $ char ')'
+           setState False
+           return $ Fix $ PFnLit exps
 
 set :: SwjParser PVal
 set = Fix . PSet <$> delimited '{' '}' (many expr)
