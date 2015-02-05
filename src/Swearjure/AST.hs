@@ -13,7 +13,6 @@ data SwjExp e = ESym (Maybe String) String
               | EFloat Double
               | EChar Char
               | EList [e]
-              | EFnLit [e]
               | EVec [e]
               | EHM [(e, e)]
               | ESet [e]
@@ -43,7 +42,6 @@ pp' sfn = cata go
         go (ERatio num den) = integer num <> char '/' <> integer den
         go (EFloat f) = double f
         go (EChar c) = char '\\' <> char c -- prettyprint-dependent
-        go (EFnLit xs) = char '#' <> (parens $ hsep xs)
         go (EList xs) = parens $ hsep xs
         go (EVec xs) = brackets $ hsep xs
         go (EHM pairs) = braces $ hsep $ concatMap (\(x,y) -> [x, y]) pairs

@@ -170,7 +170,7 @@ expr :: SwjParser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
        <|> quote <|> backquote <|> deref <|> unquote <|> sharp
 
-readAst :: String -> Either SwjError (Maybe PVal)
+readAst :: String -> Except SwjError (Maybe PVal)
 readAst s = throwLeftMap SyntaxError $
              runParser (whiteSpace >> optionMaybe expr <* eof) False "" s
   where throwLeftMap f (Left x) = throwError (f x)
