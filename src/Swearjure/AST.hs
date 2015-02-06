@@ -24,6 +24,19 @@ data SwjExp e = ESym (Maybe String) String
 
 type Expr = Mu SwjExp
 
+iList :: [Expr] -> Expr
+iList = Fix . EList
+
+iVec :: [Expr] -> Expr
+iVec = Fix . EVec
+
+iHM :: [(Expr, Expr)] -> Expr
+iHM = Fix . EHM
+
+iSet :: [Expr] -> Expr
+iSet = Fix . ESet
+
+instance EqF SwjExp where equalF = (==)
 instance ShowF SwjExp where showsPrecF = showsPrec
 
 prStr :: Expr -> String

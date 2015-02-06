@@ -28,6 +28,7 @@ data ParseVal p = PSym String -- qualified syms. Gur
                 | PVec [p]
                 | PSet [p] -- Sharpie!
                 | PHM [(p, p)]
+                | PSyntaxQuote p
                 deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type PVal = Mu ParseVal
@@ -121,8 +122,8 @@ quote = sugared '\'' "quote"
 
 -- Alright, this is obv. wrong. Need to look into the reader properly, because
 -- it does some fancy read time replacement.
-backquote :: SwjParser PVal
-backquote = sugared '`' "quote"
+syntaxQuote :: SwjParser PVal
+syntaxQuote = char '`' >> (Fix . PSyntaxQuote <$> expr)
 
 deref :: SwjParser PVal
 deref = sugared '@' "deref"
@@ -168,7 +169,7 @@ set = Fix . PSet <$> delimited '{' '}' (many expr)
 
 expr :: SwjParser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
-       <|> quote <|> backquote <|> deref <|> unquote <|> sharp
+       <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp
 
 readAst :: String -> Except SwjError (Maybe PVal)
 readAst s = throwLeftMap SyntaxError $
