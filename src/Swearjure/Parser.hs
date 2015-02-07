@@ -160,12 +160,13 @@ fnLit = do omit $ char '('
            exps <- many expr
            omit $ char ')'
            setState False
+           whiteSpace
            return $ Fix $ PFnLit exps
 
 set :: SwjParser PVal
 set = Fix . PSet <$> delimited '{' '}' (many expr)
 
--- are there more? More non-whitespacey, that is.
+-- TODO: #=
 
 expr :: SwjParser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
