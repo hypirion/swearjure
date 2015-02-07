@@ -28,9 +28,7 @@ convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
         -- -^ if we could move nses, this would've forced this fn to be of
         -- EvalState
         go (PChar c) = return $ EChar c
-        go (PFnLit xs) = do cnt <- get
-                            let (xs', cnt') = replaceFnLits cnt xs
-                            put cnt'
+        go (PFnLit xs) = do xs' <- replaceFnLits xs
                             return $ EList $ fnStar : xs'
         go (PList xs) = return $ EList xs
         go (PVec xs) = return $ EVec xs
@@ -40,42 +38,43 @@ convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
         go (PSyntaxQuote x) = unFix <$> syntaxUnquote x
         fnStar = (Fix . ESym Nothing) "fn*"
 
--- returns expression plus arglist, along with symcount
-replaceFnLits :: Int -> [Expr] -> ([Expr], Int)
-replaceFnLits n e = prepareArglist
-                    $ runState (mapM (cataM go) e)
-                               (n, Nothing, Nothing)
-  where go (ESym Nothing "%")
-          = do (cnt, p1, r) <- get
-               case p1 of
-                Nothing -> do let p1s = p1sym cnt
-                              put (cnt + 1, Just p1s, r)
-                              return p1s
-                (Just p1s) -> return p1s
-        go (ESym Nothing "%&")
-          = do (cnt, p1, r) <- get
-               case r of
-                Nothing -> do let rsym = restSym cnt
-                              put (cnt + 1, p1, Just rsym)
-                              return rsym
-                (Just rsym) -> return rsym
-        go x = return $ Fix x
-        p1sym cnt = Fix $ ESym Nothing $ "p1__" ++ show cnt ++ "#"
-        restSym cnt = Fix $ ESym Nothing $ "rest__" ++ show cnt ++ "#"
-        prepareArglist (es, (cnt, p1, rest))
-          = let arglist = maybeToList p1 ++ restArglist rest in
-             ([ (Fix . EVec) arglist
-              , (Fix . EList) es],
-              cnt)
-        restArglist (Just rest) = [Fix $ ESym Nothing "&", rest]
-        restArglist Nothing = []
-
 splitSym :: String -> (Maybe String, String)
 splitSym "/" = (Nothing, "/")
 splitSym s = case '/' `elemIndex` s of
               Nothing -> (Nothing, s)
               Just idx -> let (ns, name) = splitAt idx s in
                            (Just ns, tail name)
+
+replaceFnLits :: [Expr] -> StateT Int (Except SwjError) [Expr]
+replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
+                    (Nothing, Nothing)
+  where go (ESym Nothing "%")
+          = do (p1, r) <- get
+               case p1 of
+                Nothing -> do cnt <- lift get
+                              lift $ modify succ
+                              let p1s = p1sym cnt
+                              put (Just p1s, r)
+                              return p1s
+                (Just p1s) -> return p1s
+        go (ESym Nothing "%&")
+          = do (p1, r) <- get
+               case r of
+                Nothing -> do cnt <- lift get
+                              lift $ modify succ
+                              let rsym = restSym cnt
+                              put (p1, Just rsym)
+                              return rsym
+                (Just rsym) -> return rsym
+        go x = return $ Fix x
+        p1sym cnt = Fix $ ESym Nothing $ "p1__" ++ show cnt ++ "#"
+        restSym cnt = Fix $ ESym Nothing $ "rest__" ++ show cnt ++ "#"
+        prepareArglist (es, (p1, rest))
+          = let arglist = maybeToList p1 ++ restArglist rest in
+             [ (Fix . EVec) arglist
+             , (Fix . EList) es]
+        restArglist (Just rest) = [Fix $ ESym Nothing "&", rest]
+        restArglist Nothing = []
 
 syntaxUnquote :: Expr -> StateT Int (Except SwjError) Expr
 syntaxUnquote = go . unFix -- need some state handling here dawg.
