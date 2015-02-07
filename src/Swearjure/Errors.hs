@@ -9,5 +9,5 @@ data SwjError = SyntaxError ParseError
 
 errString :: SwjError -> String
 errString (SyntaxError err) = show err
-errString (IllegalState err) = show $ "Illegal State: " ++ err
+errString (IllegalState err) = "Illegal State: " ++ err
 

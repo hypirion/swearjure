@@ -18,7 +18,7 @@ import Text.ParserCombinators.Parsec
 
 type SwjParser = GenParser Char Bool
 
-data ParseVal p = PSym String -- qualified syms. Gur
+data ParseVal p = PSym String
                 | PString String
                 | PKw String
                 | PQualKw String
