@@ -83,9 +83,10 @@ symString = do x <- startSymChar
 symbol :: SwjParser PVal
 symbol = (Fix . PSym)  <$> lexeme symString
 
--- TODO: qualified kws
 keyword :: SwjParser PVal
-keyword = Fix . PKw <$> lexeme (char ':' >> symString)
+keyword = lexeme (char ':' >> (nonQual <|> qual))
+  where nonQual = Fix . PKw <$> symString
+        qual = Fix . PQualKw <$> (char ':' >> symString)
 
 malString :: SwjParser PVal
 malString = Fix . PString <$> (lexeme $ between (char '"') (char '"')
