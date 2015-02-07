@@ -12,11 +12,11 @@ import           Swearjure.AST
 import           Swearjure.Errors
 
 
-type Env = M.Map String String
-
 initEnv :: Env
-initEnv = M.fromList $ map (,"clojure.core")
-          ["/", "+", "*", "+", "->", "->>", "<", ">", "<=", ">="]
+initEnv = Toplevel M.empty
+--initEnv = M.fromList $ map (,"clojure.core")
+--          ["/", "+", "*", "+", "->", "->>", "<", ">", "<=", ">=", "=", "=="]
+--          ++ [(">>", "swearjure.core"), ("<<", "swearjure.core")]
 
 -- map from ns to ns
 type EvalState = ReaderT Env (StateT Int (Except SwjError))

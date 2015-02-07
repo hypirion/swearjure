@@ -4,12 +4,11 @@ module Swearjure.Reader where
 
 import           Control.Applicative ((<$>))
 import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Generics.Fixplate hiding (mapM)
 import           Data.List (elemIndex)
 import qualified Data.Map as M
-import           Data.Maybe (maybeToList)
+import           Data.Maybe (maybeToList, fromMaybe)
 import           Prelude hiding (seq)
 import           Swearjure.AST
 import           Swearjure.Errors
@@ -93,9 +92,9 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
                         return gsym
           | last s == '.' = throwError $ IllegalState "expansion of class ctors not implemented yet"
           | head s == '.' = return $ iList [_quote, Fix sym]
-          | otherwise = do maybeNs <- asks $ M.lookup s
-                           let newSym = ESym maybeNs s
-                           return $ iList [_quote, Fix newSym]
+          | otherwise = do newSym <- fromMaybe (Fix $ ESym (Just "user") s)
+                                     <$> getMapping s
+                           return $ iList [_quote, newSym]
         go sym@(ESym _ _) = return $ iList [_quote, Fix sym]
         go (EList xs)
           | head xs == _unquote = return (xs !! 1)

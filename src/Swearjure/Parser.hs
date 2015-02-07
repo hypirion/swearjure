@@ -148,7 +148,7 @@ unquote = do omit $ char '~'
 -- sharpies be here
 
 sharp :: SwjParser PVal
-sharp = char '#' >> (sharpQuote <|> set <|> fnLit)
+sharp = char '#' >> (sharpQuote <|> set <|> fnLit <|> unreadable)
 
 sharpQuote :: SwjParser PVal
 sharpQuote = sugared '\'' "var"
@@ -166,6 +166,9 @@ fnLit = do omit $ char '('
 
 set :: SwjParser PVal
 set = Fix . PSet <$> delimited '{' '}' (many expr)
+
+unreadable :: SwjParser a
+unreadable = char '<' >> fail "Unreadable form"
 
 -- TODO: #=
 

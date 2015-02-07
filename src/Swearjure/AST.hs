@@ -1,11 +1,52 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Swearjure.AST where
 
-import Data.Generics.Fixplate
-import Text.PrettyPrint
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Data.Generics.Fixplate
+import qualified Data.Map as M
+import           Swearjure.Errors
+import           Text.PrettyPrint
 
+type NS = String
+
+data Env' e = Toplevel (M.Map String (NS, e))
+            | Nested (Env' e) (M.Map String (NS, e))
+            deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+type Env = Env' Expr
+
+-- this would've been namespaced if this was proper clojure, but you can't refer
+-- to same-named values in different namespaces in Swearjure, so it doesn't
+-- matter.
+lookup :: (MonadReader Env m, MonadError SwjError m) =>
+          String -> m Expr
+lookup s = ask >>= lookupRec
+  where lookupRec (Toplevel m)
+          = m `findOr` (throwError $ NotFound s)
+        lookupRec (Nested up m)
+          = m `findOr` lookupRec up
+        m `findOr` other = do let v = M.lookup s m
+                              maybe other (return . snd) v
+
+getMapping :: (MonadReader Env m) => String -> m (Maybe Expr)
+getMapping s = ask >>= lookupRec
+  where lookupRec (Toplevel m) = m `findOr` return Nothing
+        lookupRec (Nested up m) = m `findOr` lookupRec up
+        m `findOr` other = do let v = M.lookup s m
+                              maybe other (namespaced . fst) v
+        namespaced ns = return . Just . Fix . ESym (Just ns) $ s
+
+
+data Fn' e = Fn (Env' e) String String [([String], Maybe String, e)]
+           deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+type Fn = Fn' Expr
+
+-- Again I fail at naming.
 data SwjExp e = ESym (Maybe String) String
               | EStr String
               | EInt Integer
@@ -18,8 +59,8 @@ data SwjExp e = ESym (Maybe String) String
               | ESet [e]
               | EKw (Maybe String) String
               | EBool Bool
+              | EFn (Fn' e)
               | Nil
-                -- howto funs? gahhh. Bane of my existence.
               deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type Expr = Mu SwjExp
@@ -62,6 +103,8 @@ pp' sfn = cata go
         go (EKw ns s) = char ':' <> nsPP ns <> text s
         go (EBool True) = text "true"
         go (EBool False) = text "false"
+        go (EFn (Fn _ ns fname _)) = text "#<" <> text ns <> char '$'
+                                     <> text fname <> char '>'
         go Nil = text "nil"
         nsPP (Just ns) = text ns <> char '/'
         nsPP Nothing = empty
