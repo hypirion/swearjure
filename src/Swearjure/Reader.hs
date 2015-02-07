@@ -7,7 +7,7 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.Generics.Fixplate hiding (mapM)
 import Prelude hiding (seq)
---import qualified Data.Map as M
+import qualified Data.Map as M
 import Data.Maybe (maybeToList)
 import Data.List (elemIndex)
 import Swearjure.AST
@@ -77,9 +77,18 @@ replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
         restArglist Nothing = []
 
 syntaxUnquote :: Expr -> StateT Int (Except SwjError) Expr
-syntaxUnquote = go . unFix -- need some state handling here dawg.
+syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
   where go sym@(ESym Nothing s)
-          | last s == '#' = throwError $ IllegalState "auto-gensyms not implemented"
+          | last s == '#'
+             = do r <- gets (M.lookup s)
+                  case r of
+                   Just replacement -> return replacement
+                   Nothing ->
+                     do symCnt <- lift get
+                        lift $ modify succ
+                        let gsym = iList [_quote, gensym s symCnt]
+                        modify $ M.insert s gsym
+                        return gsym
           | last s == '.' = throwError $ IllegalState "expansion of class ctors not implemented yet"
           | head s == '.' = return $ iList [_quote, Fix sym]
           | otherwise = return $ iList [_quote, Fix sym]
@@ -104,9 +113,7 @@ syntaxUnquote = go . unFix -- need some state handling here dawg.
                return $ iList [_apply, _hashmap,
                                iList [_seq, iList $ _concat : seq]]
         go x = return $ Fix x
-        sqExpand :: [Expr] -> StateT Int (Except SwjError) [Expr]
         sqExpand = mapM (listGo . unFix)
-        listGo :: SwjExp Expr -> StateT Int (Except SwjError) Expr
         listGo ls@(EList xs)
           | head xs == _unquote = return $ iList [_list, xs !! 1]
           | head xs == _unquoteSplicing
@@ -116,3 +123,5 @@ syntaxUnquote = go . unFix -- need some state handling here dawg.
         listGo x = do squote <- go x
                       return $ iList [_list, squote]
         unpair = concatMap (\(x,y) -> [x, y])
+        gensym s cnt = Fix $ ESym Nothing $ init s ++ "__"
+                       ++ show cnt ++ "__auto__"
