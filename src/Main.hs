@@ -1,29 +1,23 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
 
-import Control.Exception
 import Control.Monad.Except
 import Control.Monad.State
 import Swearjure.AST (prStr)
 import Swearjure.Errors
 import Swearjure.Reader
-import System.IO
-import System.IO.Error
+import System.Console.Readline (readline, addHistory)
 
 main :: IO ()
 main = loop 1
 
 loop :: Int -> IO ()
 loop gsymCount
-  = do putStr "swj> "
-       hFlush stdout
-       input <- try (getLine)
+  = do input <- readline "swj> "
        case input of
-        Left e ->
-          if isEOFError e
-             then return ()
-             else ioError e
-        Right str ->
-          do let (res, symCount) = (re gsymCount str)
+        Nothing -> return ()
+        Just str ->
+          do addHistory str
+             let (res, symCount) = (re gsymCount str)
              case res of
               Just x -> putStrLn x
               Nothing -> return ()

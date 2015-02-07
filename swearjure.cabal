@@ -26,5 +26,7 @@ executable swearjure
                      , containers >= 0.5
                      , pretty >= 1.1
                      , mtl >= 2.2
+                     , readline >= 1.0.3.0
+  -- Have a look at linenoise later.
   hs-source-dirs:      src
   default-language:    Haskell2010
