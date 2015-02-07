@@ -1,10 +1,25 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
+{-# LANGUAGE TupleSections #-}
 
 module Swearjure.Eval where
 
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Generics.Fixplate (Mu(..))
 import qualified Data.Map as M
 import           Swearjure.AST
+import           Swearjure.Errors
+
+
+type Env = M.Map String String
+
+initEnv :: Env
+initEnv = M.fromList $ map (,"clojure.core")
+          ["/", "+", "*", "+", "->", "->>", "<", ">", "<=", ">="]
+
+-- map from ns to ns
+type EvalState = ReaderT Env (StateT Int (Except SwjError))
 
 -- to begin with.
 specials :: M.Map String a

@@ -3,6 +3,7 @@
 
 import           Control.Applicative ((<$>))
 import           Control.Monad.Except
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Foldable (toList)
 import           Data.Sequence
@@ -11,6 +12,7 @@ import           Filesystem hiding (readFile, writeFile)
 import           Filesystem.Path.CurrentOS
 import           Swearjure.AST (prStr)
 import           Swearjure.Errors
+import           Swearjure.Eval (initEnv)
 import           Swearjure.Reader
 import           System.Console.Readline (readline, addHistory)
 
@@ -33,9 +35,8 @@ loop gsymCount
               Nothing -> return ()
              loop symCount
 
-
 re :: Int -> String -> (Maybe String, Int)
-re n s = case runExcept (runStateT (readExpr s) n) of
+re n s = case runExcept (runStateT (runReaderT (readExpr s) initEnv) n) of
           Left err -> (Just $ errString err, n)
           Right (Just x, n') -> (Just $ prStr x, n')
           Right (Nothing, n') -> (Nothing, n')

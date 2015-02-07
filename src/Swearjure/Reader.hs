@@ -15,10 +15,11 @@ import Swearjure.Errors
 import Swearjure.Eval
 import Swearjure.Parser
 
-readExpr :: String -> StateT Int (Except SwjError) (Maybe Expr)
-readExpr str = (lift $ readAst str) >>= convertAst
+readExpr :: String -> EvalState (Maybe Expr)
+            -- do you even lift?
+readExpr str = (lift . lift $ readAst str) >>= convertAst
 
-convertAst :: Maybe PVal -> StateT Int (Except SwjError) (Maybe Expr)
+convertAst :: Maybe PVal -> EvalState (Maybe Expr)
 convertAst Nothing = return Nothing
 convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
   where go (PSym s) = return $ uncurry ESym $ splitSym s
@@ -45,7 +46,7 @@ splitSym s = case '/' `elemIndex` s of
               Just idx -> let (ns, name) = splitAt idx s in
                            (Just ns, tail name)
 
-replaceFnLits :: [Expr] -> StateT Int (Except SwjError) [Expr]
+replaceFnLits :: [Expr] -> EvalState [Expr]
 replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
                     (Nothing, Nothing)
   where go (ESym Nothing "%")
@@ -76,7 +77,7 @@ replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
         restArglist (Just rest) = [Fix $ ESym Nothing "&", rest]
         restArglist Nothing = []
 
-syntaxUnquote :: Expr -> StateT Int (Except SwjError) Expr
+syntaxUnquote :: Expr -> EvalState Expr
 syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
   where go sym@(ESym Nothing s)
           | last s == '#'
