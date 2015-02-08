@@ -52,6 +52,7 @@ seq [x] = go (unFix x)
         go (EList vals) = return vals
         go (EVec vals) = return vals
         go (EHM pairs) = return $ vecPairs pairs
+        go (EStr s) = return $ map (Fix . EChar) s
         go Nil = return []
         go x' = throwError $ CastException (typeName' x') "ISeq"
         vecPairs = map (\(a, b) -> (Fix (EVec [a, b])))

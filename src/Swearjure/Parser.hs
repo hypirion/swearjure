@@ -174,12 +174,16 @@ unreadable = char '<' >> fail "Unreadable form"
 
 -- TODO: #=
 
+character :: SwjParser PVal
+character = char '\\' >> (Fix . PChar <$> satisfy (not . isAlphaNum))
+
 alphaNums :: SwjParser a
 alphaNums = satisfy isAlphaNum >> fail "Alphanumeric characters are not allowed"
 
 expr :: SwjParser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
-       <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp <|> alphaNums
+       <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp <|> character
+       <|> alphaNums
 
 readAst :: String -> Except SwjError (Maybe PVal)
 readAst s = throwLeftMap SyntaxError $
