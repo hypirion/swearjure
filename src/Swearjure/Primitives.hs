@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Swearjure.Primitives where
 
@@ -6,6 +7,7 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Data.Generics.Fixplate
 import Data.Ratio
+import Prelude hiding (seq)
 import Swearjure.AST hiding (lookup)
 import Swearjure.Errors
 
@@ -27,9 +29,21 @@ getFn [m, k, default'] = find (unFix m) k default'
 getFn x = throwError $ ArityException (length x) "core/get"
 
 get1Fn :: [Expr] -> EvalState Expr
-get1Fn = undefined
+get1Fn [m, k] = go (unFix m)
+  where go (EVec vals)
+          = case unFix k of
+             EInt n | n < 0 -> throwError $ IllegalArgument "Index can't be negative"
+             EInt n | length vals > fromIntegral n -> return $ vals !! fromIntegral n
+             EInt _ -> throwError $ IllegalArgument "Index out of bounds for vector"
+             _ -> throwError $ IllegalArgument "Key must be integer"
+        go (ESet vals)
+          = if k `elem` vals
+            then return k
+            else return $ Fix Nil
+        go _ = throwError $ IllegalState "Internal Swearjure error -- get1Fn got unexpected value"
+get1Fn xs = throwError $ ArityException (length xs) "vec/set" -- (typename $ head xs)
 
--- this one must be wrapped properly to use in envs.
+-- this one must be wrapped properly to use in envs. (liftM (Fix . EList) . seq)
 seq :: [Expr] -> EvalState [Expr]
 seq [x] = go (unFix x)
   where go (ESet vals) = return vals
@@ -39,6 +53,58 @@ seq [x] = go (unFix x)
         go _ = throwError $ CastException "some thing" "ISeq"
         vecPairs = map (\(a, b) -> (Fix (EVec [a, b])))
 seq x = throwError $ ArityException (length x) "core/seq"
+
+-- same as above
+concat :: [Expr] -> EvalState [Expr]
+concat xs = foldM prepend [] (reverse xs)
+  where prepend acc v = do s <- seq [v]
+                           return $ s ++ acc
+
+multiCmp :: (SwjExp Expr -> SwjExp Expr -> EvalState Bool) -> String
+            -> [SwjExp Expr] -> EvalState Expr
+multiCmp _ fname [] = throwError $ ArityException 0 fname
+multiCmp _ _ [_] = return $ Fix $ EBool True
+multiCmp f _ [x, y] = liftM (Fix . EBool) $ f x y
+multiCmp f fname (a : b : r) = do res <- f a b
+                                  if res
+                                    then multiCmp f fname (b : r)
+                                    else return $ Fix $ EBool False
+
+numOp :: (forall a. Ord a => a -> a -> Bool) -> SwjExp Expr -> SwjExp Expr
+         -> EvalState Bool
+numOp op = cmp
+  where cmp (EInt x) (EInt y) = return $ x `op` y
+        cmp (EInt x) (EFloat y) = return $ fromIntegral x `op` y
+        cmp (EInt x) (ERatio y) = return $ (x % 1) `op` y
+        cmp (EFloat x) (EInt y) = return $ x `op` fromIntegral y
+        cmp (EFloat x) (EFloat y) = return $ x `op` y
+        cmp (EFloat x) (ERatio y) = return $ x `op` asFloat y
+        cmp (ERatio x) (ERatio y) = return $ x `op` y
+        cmp (ERatio x) (EInt y) = return $ x `op` (y % 1)
+        cmp (ERatio x) (EFloat y) = return $ asFloat x `op` y
+        cmp _ _ = throwError $ IllegalArgument "Attempted to compare number with something non-numbery" 
+
+lt :: [Expr] -> EvalState Expr
+lt = multiCmp (numOp (<)) "core/<" . map unFix
+
+lte :: [Expr] -> EvalState Expr
+lte = multiCmp (numOp (<=)) "core/<=" . map unFix
+
+gt :: [Expr] -> EvalState Expr
+gt = multiCmp (numOp (>)) "core/>" . map unFix
+
+gte :: [Expr] -> EvalState Expr
+gte = multiCmp (numOp (>=)) "core/>=" . map unFix
+
+numEq :: [Expr] -> EvalState Expr
+numEq = multiCmp (numOp (==)) "core/==" . map unFix
+
+eq :: [Expr] -> EvalState Expr
+eq [] = throwError $ ArityException 0 "core/="
+eq [_] = return $ Fix $ EBool True
+eq (x : y : r) = if x == y
+                 then eq (y : r)
+                 else return $ Fix $ EBool False
 
 -- I see that these operations can be generalized, but it won't make them easier
 -- to maintain or anything, really.

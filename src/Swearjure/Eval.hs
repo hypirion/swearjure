@@ -8,7 +8,7 @@ import           Data.Generics.Fixplate (Mu(..))
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Traversable as T
-import           Prelude hiding (lookup, seq)
+import           Prelude hiding (lookup, seq, concat)
 import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Primitives
@@ -25,14 +25,14 @@ initEnv = Toplevel $ M.fromList $ map
           , ("list", return . Fix . EList)
           , ("vector", return . Fix . EVec)
           , ("apply", apply)
---          , ("->", undefined)
---          , ("->>", undefined)
---          , ("<", undefined)
---          , (">", undefined)
---          , ("<=", undefined)
---          , (">=", undefined)
---          , ("=", undefined)
---          , ("==", undefined)
+          , ("seq", liftM (Fix . EList) . seq)
+          , ("concat", liftM (Fix . EList) . concat)
+          , ("<", lt)
+          , (">", gt)
+          , ("<=", lte)
+          , (">=", gte)
+          , ("=", eq)
+          , ("==", numEq)
           ]
 
 apply :: [Expr] -> EvalState Expr
@@ -78,10 +78,9 @@ ifn = go . unFix
                         (\xs -> let (f, r) = splitAt 1 xs in
                                  getFn $ f ++ [Fix s] ++ r)
         lookup12 hm = unnamedPrim $ getFn . (Fix hm :)
-        lookup1 _ = unnamedPrim get1Fn
+        lookup1 x = unnamedPrim $ get1Fn . (Fix x :)
         unnamedPrim = return . PrimFn . Prim ("", "")
 
--- to begin with.
 specials :: M.Map String a
 specials = M.fromList
            [ ("fn*", undefined)
@@ -89,6 +88,8 @@ specials = M.fromList
            , (".", undefined)
            , ("var", undefined)
            , ("&", undefined)
+           , ("if", undefined)
+           , ("var", undefined)
            ]
 
 _quote :: Expr
