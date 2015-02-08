@@ -95,6 +95,7 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
                                      <$> getMapping s
                            return $ iList [_quote, newSym]
         go sym@(ESym _ _) = return $ iList [_quote, Fix sym]
+        go lst@(EList []) = return $ Fix lst
         go (EList xs)
           | head xs == _unquote = return (xs !! 1)
           | head xs == _unquoteSplicing
@@ -115,6 +116,7 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
                                iList [_seq, iList $ _concat : seq]]
         go x = return $ Fix x
         sqExpand = mapM (listGo . unFix)
+        listGo lst@(EList []) = return $ iList [_list, Fix lst]
         listGo ls@(EList xs)
           | head xs == _unquote = return $ iList [_list, xs !! 1]
           | head xs == _unquoteSplicing
