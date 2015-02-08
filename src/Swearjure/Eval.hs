@@ -10,7 +10,7 @@ import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Set as S
 import qualified Data.Traversable as T
 import           Prelude hiding (lookup, seq, concat)
-import           Swearjure.AST
+import           Swearjure.AST hiding (specials)
 import           Swearjure.Errors
 import           Swearjure.Primitives
 
@@ -18,7 +18,8 @@ import           Swearjure.Primitives
 initEnv :: Env
 initEnv = Toplevel $ M.fromList $ map
           (\(fname, f) -> (fname, ("clojure.core",
-                                   Fix $ EFn $ PrimFn (Prim ("core", fname) f))))
+                                   (False, Fix $ EFn $ PrimFn
+                                           (Prim ("core", fname) f)))))
           [ ("+", plus)
           , ("/", divFn)
           , ("*", mul)
@@ -36,6 +37,12 @@ initEnv = Toplevel $ M.fromList $ map
           , (">=", gte)
           , ("=", eq)
           , ("==", numEq)
+          ] ++ map
+          (\(fname, f) -> (fname, ("clojure.core",
+                                   (True, Fix $ EFn $ PrimFn
+                                          (Prim ("core", fname) f)))))
+          [ ("->>", undefined)
+          , ("->", undefined)
           ]
 
 apply :: [Expr] -> EvalState Expr
@@ -48,15 +55,26 @@ apply (f : xs) = do fn <- ifn f
                      PrimFn (Prim _ prim) -> prim spliced
                      (Fn _ _ _ _) -> throwError $ IllegalState "Can't apply nonprimitives yet"
 
+macroexpand :: Expr -> EvalState Expr
+macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
+  | x == _quote = return lst
+  | otherwise = do maybeMacro <- lookupMacro s
+                   case maybeMacro of
+                    Just macro ->
+                      do expandOnce <- apply [macro, (Fix (EList xs))]
+                         macroexpand expandOnce
+                    Nothing -> Fix <$> T.mapM macroexpand (unFix lst)
+macroexpand (Fix x) = Fix <$> T.mapM macroexpand x
+
 eval :: Expr -> EvalState Expr
-eval = go . unFix
+eval = macroexpand >=> go . unFix
   where go (ESym _ s) = lookup s
         go x@(EList []) = return $ Fix x
         go (EList xs)
           | head xs == _quote = return $ fromMaybe _nil (listToMaybe $ tail xs)
           | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
           | otherwise = do f : xs' <- mapM eval xs
-                           apply $ [f, (Fix (EList xs'))]
+                           apply [f, (Fix (EList xs'))]
         go v@(EVec _) = Fix <$> T.mapM eval v
         go (ESet xs) = do evals <- mapM eval xs
                           checkDupe evals

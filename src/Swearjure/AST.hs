@@ -19,28 +19,43 @@ type EvalState = ReaderT Env (StateT Int (Except SwjError))
 
 type NS = String
 
-data Env' e = Toplevel (M.Map String (NS, e))
-            | Nested (Env' e) (M.Map String (NS, e))
+data Env' e = Toplevel (M.Map String (NS, (Bool, e)))
+            | Nested (Env' e) (M.Map String (NS, (Bool, e)))
             deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type Env = Env' Expr
 
--- this would've been namespaced if this was proper clojure, but you can't refer
--- to same-named values in different namespaces in Swearjure, so it doesn't
--- matter.
+-- lookup and lookupMacro would've been namespaced if this was proper clojure,
+-- but you can't refer to same-named values in different namespaces in
+-- Swearjure, so it doesn't matter.
+lookupMacro :: (MonadReader Env m) => String -> m (Maybe Expr)
+lookupMacro s = ask >>= lookupRec
+  where lookupRec (Toplevel m) = m `findOr` return Nothing
+        lookupRec (Nested up m) = m `findOr` lookupRec up
+        m `findOr` other
+          = do let v = M.lookup s m
+               case v of
+                Just (_, (False, _)) -> return Nothing
+                Just (_, (True, macro)) -> return (Just macro)
+                Nothing -> other
+
 lookup :: (MonadReader Env m, MonadError SwjError m) =>
           String -> m Expr
 lookup s = ask >>= lookupRec
-  where lookupRec (Toplevel m)
-          = m `findOr` (throwError $ NotFound s)
-        lookupRec (Nested up m)
-          = m `findOr` lookupRec up
-        m `findOr` other = do let v = M.lookup s m
-                              maybe other (return . snd) v
+  where lookupRec (Toplevel m) = m `findOr` (throwError $ NotFound s)
+        lookupRec (Nested up m) = m `findOr` lookupRec up
+        m `findOr` other
+          = do let v = M.lookup s m
+               case v of
+                Just (_, (False, val)) -> return val
+                Just (ns, (True, _)) -> throwError $ IllegalArgument $
+                                        "Can't take value of a macro: #'" ++ ns
+                                        ++ "/" ++ s
+                Nothing -> other
 
 specials :: S.Set String
 specials = S.fromList
-           ["fn*", "quote", ".", "var", "&", "if", "var", "nil"]
+           ["fn*", "quote", ".", "var", "&", "if", "nil"]
 
 getMapping :: (MonadReader Env m) => String -> m (Maybe Expr)
 getMapping s = if S.member s specials
