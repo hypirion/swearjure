@@ -84,17 +84,6 @@ ifn = go . unFix
         lookup1 x = unnamedPrim $ get1Fn . (Fix x :)
         unnamedPrim = return . PrimFn . Prim ("", "")
 
-specials :: M.Map String a
-specials = M.fromList
-           [ ("fn*", undefined)
-           , ("quote", undefined)
-           , (".", undefined)
-           , ("var", undefined)
-           , ("&", undefined)
-           , ("if", undefined)
-           , ("var", undefined)
-           ]
-
 checkDupe :: [Expr] -> EvalState ()
 checkDupe xs = go S.empty xs
   where go _ [] = return ()

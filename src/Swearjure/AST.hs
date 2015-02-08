@@ -10,6 +10,7 @@ import           Control.Monad.State
 import           Data.Generics.Fixplate
 import qualified Data.Map as M
 import           Data.Ratio
+import qualified Data.Set as S
 import           Swearjure.Errors
 import           Text.PrettyPrint
 
@@ -37,14 +38,19 @@ lookup s = ask >>= lookupRec
         m `findOr` other = do let v = M.lookup s m
                               maybe other (return . snd) v
 
+specials :: S.Set String
+specials = S.fromList
+           ["fn*", "quote", ".", "var", "&", "if", "var", "nil"]
+
 getMapping :: (MonadReader Env m) => String -> m (Maybe Expr)
-getMapping s = ask >>= lookupRec
+getMapping s = if S.member s specials
+               then return . Just . Fix . ESym Nothing $ s
+               else ask >>= lookupRec
   where lookupRec (Toplevel m) = m `findOr` return Nothing
         lookupRec (Nested up m) = m `findOr` lookupRec up
         m `findOr` other = do let v = M.lookup s m
                               maybe other (namespaced . fst) v
         namespaced ns = return . Just . Fix . ESym (Just ns) $ s
-
 
 data Fn' e = Fn (Env' e) String String [([String], Maybe String, e)]
            | PrimFn (PFn Expr)
