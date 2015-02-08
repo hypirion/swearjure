@@ -128,3 +128,36 @@ pp' sfn = cata go
         go Nil = text "nil"
         nsPP (Just ns) = text ns <> char '/'
         nsPP Nothing = empty
+
+_quote :: Expr
+_quote = Fix $ ESym Nothing "quote"
+
+_unquote :: Expr
+_unquote = Fix $ ESym (Just "clojure.core") "unquote"
+
+_unquoteSplicing :: Expr
+_unquoteSplicing = Fix $ ESym (Just "clojure.core") "unquote-splicing"
+
+_seq :: Expr
+_seq = Fix $ ESym (Just "clojure.core") "seq"
+
+_concat :: Expr
+_concat = Fix $ ESym (Just "clojure.core") "concat"
+
+_apply :: Expr
+_apply = Fix $ ESym (Just "clojure.core") "apply"
+
+_list :: Expr
+_list = Fix $ ESym (Just "clojure.core") "list"
+
+_vector :: Expr
+_vector = Fix $ ESym (Just "clojure.core") "vector"
+
+_hashset :: Expr
+_hashset = Fix $ ESym (Just "clojure.core") "hash-set"
+
+_hashmap :: Expr
+_hashmap = Fix $ ESym (Just "clojure.core") "hash-map"
+
+_nil :: Expr
+_nil = Fix Nil

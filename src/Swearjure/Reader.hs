@@ -12,7 +12,6 @@ import           Data.Maybe (maybeToList, fromMaybe)
 import           Prelude hiding (seq)
 import           Swearjure.AST
 import           Swearjure.Errors
-import           Swearjure.Eval
 import           Swearjure.Parser
 
 readExpr :: String -> EvalState (Maybe Expr)
