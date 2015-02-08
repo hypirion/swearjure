@@ -7,6 +7,7 @@ import           Control.Monad.Except
 import           Data.Generics.Fixplate (Mu(..))
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe, listToMaybe)
+import qualified Data.Set as S
 import qualified Data.Traversable as T
 import           Prelude hiding (lookup, seq, concat)
 import           Swearjure.AST
@@ -56,10 +57,10 @@ eval = go . unFix
                            apply $ [f, (Fix (EList xs'))]
         go v@(EVec _) = Fix <$> T.mapM eval v
         go (ESet xs) = do evals <- mapM eval xs
-                          -- check if duplicates, and if so, throw illegal argument
+                          checkDupe evals
                           return $ Fix $ ESet evals
         go (EHM pairs) = do evals <- mapMtuple eval pairs
-                            -- check if duplicate keys, and if so, throw illegal argument
+                            checkDupe $ map fst evals
                             return $ Fix $ EHM evals
         go x = return $ Fix x
         mapMtuple f = mapM (\(x,y) -> (,) <$> f x <*> f y)
@@ -124,3 +125,11 @@ _hashmap = Fix $ ESym (Just "clojure.core") "hash-map"
 
 _nil :: Expr
 _nil = Fix Nil
+
+checkDupe :: [Expr] -> EvalState ()
+checkDupe xs = go S.empty xs
+  where go _ [] = return ()
+        go s (x : r)
+          | S.member x s = throwError $ IllegalState
+                           $ "Duplicate entry: " ++ prStr x
+          | otherwise = go (S.insert x s) r

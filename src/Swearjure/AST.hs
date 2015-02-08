@@ -95,6 +95,7 @@ iSet :: [Expr] -> Expr
 iSet = Fix . ESet
 
 instance EqF SwjExp where equalF = (==)
+instance OrdF SwjExp where compareF = compare
 instance ShowF SwjExp where showsPrecF = showsPrec
 
 prStr :: Expr -> String
