@@ -119,7 +119,9 @@ sugared c s = do (omit . lexeme . char) c
                  return $ call (cljns ++ s) [e]
 
 quote :: SwjParser PVal
-quote = sugared '\'' "quote"
+quote = do (omit . lexeme . char) '\''
+           e <- expr
+           return $ call "quote" [e]
 
 -- Alright, this is obv. wrong. Need to look into the reader properly, because
 -- it does some fancy read time replacement.
