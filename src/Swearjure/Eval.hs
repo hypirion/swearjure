@@ -16,11 +16,15 @@ import           Swearjure.Primitives
 
 initEnv :: Env
 initEnv = Toplevel $ M.fromList $ map
-          (\(x, f) -> (x, ("clojure.core", Fix $ EFn $ PrimFn f)))
-          [ ("+", Prim ("core", "+") plus)
-          , ("/", Prim ("core", "/") divFn)
-          , ("*", Prim ("core", "*") mul)
-          , ("-", Prim ("core", "-") minus)
+          (\(fname, f) -> (fname, ("clojure.core",
+                                   Fix $ EFn $ PrimFn (Prim ("core", fname) f))))
+          [ ("+", plus)
+          , ("/", divFn)
+          , ("*", mul)
+          , ("-", minus)
+          , ("list", return . Fix . EList)
+          , ("vector", return . Fix . EVec)
+          , ("apply", apply)
 --          , ("->", undefined)
 --          , ("->>", undefined)
 --          , ("<", undefined)
