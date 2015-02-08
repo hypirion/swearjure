@@ -14,8 +14,8 @@ data SwjError = SyntaxError ParseError
 
 errString :: SwjError -> String
 errString (SyntaxError err) = show err
-errString (IllegalState err) = "Illegal State: " ++ err
-errString (IllegalArgument err) = "Illegal Argument: " ++ err
+errString (IllegalState err) = "Illegal state: " ++ err
+errString (IllegalArgument err) = "Illegal argument: " ++ err
 errString (ArityException n fname) = "Wrong number of args (" ++ show n
                                      ++ ") passed to: " ++ fname
 errString (CastException from to) = "Cast exception: " ++ from

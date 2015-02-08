@@ -101,6 +101,25 @@ data SwjExp e = ESym (Maybe String) String
               | Nil
               deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
+typeName' :: SwjExp e -> String
+typeName' (ESym _ _) = "Symbol"
+typeName' (EStr _ ) = "String"
+typeName' (EInt _) = "Integer"
+typeName' (ERatio _) = "Ratio"
+typeName' (EFloat _) = "Float"
+typeName' (EChar _) = "Char"
+typeName' (EList _) = "PersistentList"
+typeName' (EVec _) = "PersistentVector"
+typeName' (EHM _) = "PersistentHashMap"
+typeName' (ESet _) = "PersistentSet"
+typeName' (EKw _ _) = "Keyword"
+typeName' (EBool _) = "Boolean"
+typeName' (EFn _) = "Fn"
+typeName' Nil = "nil"
+
+typeName :: Expr -> String
+typeName = typeName' . unFix
+
 type Expr = Mu SwjExp
 
 iList :: [Expr] -> Expr

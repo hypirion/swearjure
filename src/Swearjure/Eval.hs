@@ -94,7 +94,7 @@ ifn = go . unFix
         go v@(EVec _) = lookup1 v
         go s@(ESet _) = lookup1 s
         go hm@(EHM _) = lookup12 hm
-        go _ = throwError $ CastException "some type" "IFn"
+        go x = throwError $ CastException (typeName' x) "IFn"
         lookupThing s = unnamedPrim
                         (\xs -> let (f, r) = splitAt 1 xs in
                                  getFn $ f ++ [Fix s] ++ r)

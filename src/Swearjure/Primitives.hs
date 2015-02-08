@@ -43,7 +43,7 @@ get1Fn [m, k] = go (unFix m)
             then return k
             else return $ Fix Nil
         go _ = throwError $ IllegalState "Internal Swearjure error -- get1Fn got unexpected value"
-get1Fn xs = throwError $ ArityException (length xs) "vec/set" -- (typename $ head xs)
+get1Fn xs = throwError $ ArityException (length xs) (typeName $ head xs)
 
 -- this one must be wrapped properly to use in envs. (liftM (Fix . EList) . seq)
 seq :: [Expr] -> EvalState [Expr]
@@ -53,7 +53,7 @@ seq [x] = go (unFix x)
         go (EVec vals) = return vals
         go (EHM pairs) = return $ vecPairs pairs
         go Nil = return []
-        go _ = throwError $ CastException "some thing" "ISeq"
+        go x' = throwError $ CastException (typeName' x') "ISeq"
         vecPairs = map (\(a, b) -> (Fix (EVec [a, b])))
 seq x = throwError $ ArityException (length x) "core/seq"
 
@@ -85,7 +85,9 @@ numOp op = cmp
         cmp (ERatio x) (ERatio y) = return $ x `op` y
         cmp (ERatio x) (EInt y) = return $ x `op` (y % 1)
         cmp (ERatio x) (EFloat y) = return $ asFloat x `op` y
-        cmp _ _ = throwError $ IllegalArgument "Attempted to compare number with something non-numbery" 
+        cmp x y
+          | isNum x = throwError $ CastException (typeName' y) "Number"
+          | otherwise = throwError $ CastException (typeName' x) "Number"
 
 lt :: [Expr] -> EvalState Expr
 lt = multiCmp (numOp (<)) "core/<" . map unFix
@@ -152,7 +154,9 @@ plus xs = Fix <$> foldM (|+|) (EInt 0) (map unFix xs)
         (ERatio rat) |+| (EInt y) = unRatio (rat + (y % 1))
         (ERatio rat) |+| (EFloat y) = return $ EFloat (asFloat rat + y)
         (ERatio x) |+| (ERatio y) = unRatio (x + y)
-        _ |+| _ = throwError $ CastException "wat" "Number"
+        x |+| y
+          | isNum x = throwError $ CastException (typeName' y) "Number"
+          | otherwise = throwError $ CastException (typeName' x) "Number"
 
 minus :: [Expr] -> EvalState Expr
 minus [] = throwError $ ArityException 0 "core/-"
@@ -167,7 +171,9 @@ minus (x' : xs) = Fix <$> foldM (|-|) (unFix x') (map unFix xs)
         (ERatio rat) |-| (EInt y) = unRatio (rat - (y % 1))
         (ERatio rat) |-| (EFloat y) = return $ EFloat (asFloat rat - y)
         (ERatio x) |-| (ERatio y) = unRatio (x - y)
-        _ |-| _ = throwError $ CastException "wat" "Number"
+        x |-| y
+          | isNum x = throwError $ CastException (typeName' y) "Number"
+          | otherwise = throwError $ CastException (typeName' x) "Number"
 
 mul :: [Expr] -> EvalState Expr
 mul xs = Fix <$> foldM (|*|) (EInt 1) (map unFix xs)
@@ -180,7 +186,9 @@ mul xs = Fix <$> foldM (|*|) (EInt 1) (map unFix xs)
         (ERatio rat) |*| (EInt y) = unRatio (rat * (y % 1))
         (ERatio rat) |*| (EFloat y) = return $ EFloat (asFloat rat * y)
         (ERatio x) |*| (ERatio y) = unRatio (x * y)
-        _ |*| _ = throwError $ CastException "wat" "Number"
+        x |*| y
+          | isNum x = throwError $ CastException (typeName' y) "Number"
+          | otherwise = throwError $ CastException (typeName' x) "Number"
 
 divFn :: [Expr] -> EvalState Expr
 divFn [] = throwError $ ArityException 0 "core//"
@@ -196,7 +204,9 @@ divFn (x' : xs) = Fix <$> foldM divide (unFix x') (map unFix xs)
         (ERatio rat) `divide` (EInt y) = unRatio (rat / (y % 1))
         (ERatio rat) `divide` (EFloat y) = EFloat (asFloat rat) `divide` EFloat y
         (ERatio x) `divide `(ERatio y) = unRatio (x / y)
-        _ `divide` _ = throwError $ CastException "wat" "Number"
+        x `divide` y
+          | isNum x = throwError $ CastException (typeName' y) "Number"
+          | otherwise = throwError $ CastException (typeName' x) "Number"
 
 safeRat :: Integer -> Integer -> EvalState (SwjExp e)
 safeRat num den = case den of
@@ -211,3 +221,9 @@ unRatio rat = return (case denominator rat of
 
 asFloat :: Rational -> Double
 asFloat rat = fromIntegral (numerator rat) / fromIntegral (denominator rat)
+
+isNum :: SwjExp e -> Bool
+isNum (EInt _) = True
+isNum (EFloat _) = True
+isNum (ERatio _) = True
+isNum _ = False
