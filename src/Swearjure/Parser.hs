@@ -84,7 +84,7 @@ symbol :: SwjParser PVal
 symbol = (Fix . PSym)  <$> lexeme symString
 
 keyword :: SwjParser PVal
-keyword = lexeme (char ':' >> (nonQual <|> qual))
+keyword = lexeme (char ':' >> (nonQual <|> qual <|> alphaNums))
   where nonQual = Fix . PKw <$> symString
         qual = Fix . PQualKw <$> (char ':' >> symString)
 
@@ -174,9 +174,12 @@ unreadable = char '<' >> fail "Unreadable form"
 
 -- TODO: #=
 
+alphaNums :: SwjParser a
+alphaNums = satisfy isAlphaNum >> fail "Alphanumeric characters are not allowed"
+
 expr :: SwjParser PVal
 expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
-       <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp
+       <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp <|> alphaNums
 
 readAst :: String -> Except SwjError (Maybe PVal)
 readAst s = throwLeftMap SyntaxError $
