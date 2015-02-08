@@ -3,13 +3,15 @@
 
 module Swearjure.Primitives where
 
-import Control.Applicative ((<$>))
-import Control.Monad.Except
-import Data.Generics.Fixplate
-import Data.Ratio
-import Prelude hiding (seq)
-import Swearjure.AST hiding (lookup)
-import Swearjure.Errors
+import           Control.Applicative ((<$>))
+import           Control.Monad.Except
+import           Data.Generics.Fixplate
+import qualified Data.Map as M
+import           Data.Ratio
+import qualified Data.Set as S
+import           Prelude hiding (seq)
+import           Swearjure.AST hiding (lookup)
+import           Swearjure.Errors
 
 getFn :: [Expr] -> EvalState Expr
 getFn [m, v] = getFn [m, v, Fix Nil]
@@ -50,6 +52,7 @@ seq [x] = go (unFix x)
         go (EList vals) = return vals
         go (EVec vals) = return vals
         go (EHM pairs) = return $ vecPairs pairs
+        go Nil = return []
         go _ = throwError $ CastException "some thing" "ISeq"
         vecPairs = map (\(a, b) -> (Fix (EVec [a, b])))
 seq x = throwError $ ArityException (length x) "core/seq"
@@ -105,6 +108,19 @@ eq [_] = return $ Fix $ EBool True
 eq (x : y : r) = if x == y
                  then eq (y : r)
                  else return $ Fix $ EBool False
+
+-- hash-map and hash-set
+
+hashMap :: [Expr] -> EvalState Expr
+hashMap xs = Fix . EHM . M.toList <$> go M.empty xs
+  where go m [] = return m
+        go _ [k] = throwError $ IllegalArgument $ "No value supplied for key: " ++ prStr k
+        go m (k : v : kvs) = go (M.insert k v m) kvs
+
+hashSet :: [Expr] -> EvalState Expr
+hashSet xs = Fix . ESet . S.toList <$> go S.empty xs
+  where go s [] = return s
+        go s (v : vs) = go (S.insert v s) vs
 
 -- I see that these operations can be generalized, but it won't make them easier
 -- to maintain or anything, really.

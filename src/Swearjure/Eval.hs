@@ -28,6 +28,8 @@ initEnv = Toplevel $ M.fromList $ map
           , ("apply", apply)
           , ("seq", liftM (Fix . EList) . seq)
           , ("concat", liftM (Fix . EList) . concat)
+          , ("hash-map", hashMap)
+          , ("hash-set", hashSet)
           , ("<", lt)
           , (">", gt)
           , ("<=", lte)
