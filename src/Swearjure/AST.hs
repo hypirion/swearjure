@@ -6,10 +6,14 @@ module Swearjure.AST where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Generics.Fixplate
 import qualified Data.Map as M
 import           Swearjure.Errors
 import           Text.PrettyPrint
+
+
+type EvalState = ReaderT Env (StateT Int (Except SwjError))
 
 type NS = String
 
@@ -42,7 +46,19 @@ getMapping s = ask >>= lookupRec
 
 
 data Fn' e = Fn (Env' e) String String [([String], Maybe String, e)]
+           | PrimFn (PFn Expr)
            deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+data PFn e = Prim (String, String) ([e] -> EvalState e)
+
+instance Eq (PFn e) where
+  (Prim a _) == (Prim b _) = a == b
+
+instance Ord (PFn e) where
+  (Prim a _) `compare` (Prim b _) = a `compare` b
+
+instance Show (PFn e) where
+  show (Prim (ns, name) _) = "#<" ++ show ns ++ "$" ++ show name ++ ">"
 
 type Fn = Fn' Expr
 
@@ -105,6 +121,8 @@ pp' sfn = cata go
         go (EBool False) = text "false"
         go (EFn (Fn _ ns fname _)) = text "#<" <> text ns <> char '$'
                                      <> text fname <> char '>'
+        go (EFn (PrimFn (Prim (ns, fname) _)))
+          = text "#<" <> text ns <> char '$' <> text fname <> char '>'
         go Nil = text "nil"
         nsPP (Just ns) = text ns <> char '/'
         nsPP Nothing = empty
