@@ -19,7 +19,7 @@ errString (IllegalArgument err) = "Illegal Argument: " ++ err
 errString (ArityException n fname) = "Wrong number of args (" ++ show n
                                      ++ ") passed to: " ++ fname
 errString (CastException from to) = "Cast exception: " ++ from
-                                    ++ "cannot be cast to" ++ to
+                                    ++ " cannot be cast to " ++ to
 errString (NotFound sym) = "Unable to resolve symbol: " ++ sym
                            ++ " in this context"
 

@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
-{-# LANGUAGE TupleSections #-}
 
 module Swearjure.Eval where
 
@@ -19,9 +18,9 @@ initEnv :: Env
 initEnv = Toplevel $ M.fromList $ map
           (\(x, f) -> (x, ("clojure.core", Fix $ EFn $ PrimFn f)))
           [ ("+", Prim ("core", "+") plus)
---          , ("/", undefined)
---          , ("*", undefined)
---          , ("+", undefined)
+          , ("/", Prim ("core", "/") divFn)
+          , ("*", Prim ("core", "*") mul)
+          , ("-", Prim ("core", "-") minus)
 --          , ("->", undefined)
 --          , ("->>", undefined)
 --          , ("<", undefined)
@@ -31,7 +30,6 @@ initEnv = Toplevel $ M.fromList $ map
 --          , ("=", undefined)
 --          , ("==", undefined)
           ]
-  where plus _ = return $ Fix $ EInt 0
 
 apply :: [Expr] -> EvalState Expr
 apply [] = throwError $ ArityException 0 "core/apply"

@@ -9,6 +9,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Generics.Fixplate
 import qualified Data.Map as M
+import           Data.Ratio
 import           Swearjure.Errors
 import           Text.PrettyPrint
 
@@ -66,7 +67,7 @@ type Fn = Fn' Expr
 data SwjExp e = ESym (Maybe String) String
               | EStr String
               | EInt Integer
-              | ERatio Integer Integer
+              | ERatio Rational
               | EFloat Double
               | EChar Char
               | EList [e]
@@ -109,7 +110,7 @@ pp' sfn = cata go
   where go (ESym ns s) = nsPP ns <> text s
         go (EStr s) = sfn s
         go (EInt n) = integer n
-        go (ERatio num den) = integer num <> char '/' <> integer den
+        go (ERatio r) = integer (numerator r) <> char '/' <> integer (denominator r)
         go (EFloat f) = double f
         go (EChar c) = char '\\' <> char c -- prettyprint-dependent
         go (EList xs) = parens $ hsep xs
