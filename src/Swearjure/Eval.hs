@@ -14,7 +14,6 @@ import           Swearjure.AST hiding (specials)
 import           Swearjure.Errors
 import           Swearjure.Primitives
 
-
 initEnv :: Env
 initEnv = Toplevel $ M.fromList $ map
           (\(fname, f) -> (fname, ("clojure.core",
@@ -41,8 +40,9 @@ initEnv = Toplevel $ M.fromList $ map
           (\(fname, f) -> (fname, ("clojure.core",
                                    (True, Fix $ EFn $ PrimFn
                                           (Prim ("core", fname) f)))))
-          [ ("->>", undefined)
-          , ("->", undefined)
+          -- TODO: Implement these as non-prim macros in Swearjure. Somehow.
+          [ ("->>", threadLast)
+          , ("->", threadSnd)
           ]
 
 apply :: [Expr] -> EvalState Expr

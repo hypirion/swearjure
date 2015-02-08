@@ -122,6 +122,22 @@ hashSet xs = Fix . ESet . S.toList <$> go S.empty xs
   where go s [] = return s
         go s (v : vs) = go (S.insert v s) vs
 
+-- ->> and ->
+
+threadLast :: [Expr] -> EvalState Expr
+threadLast [] = throwError $ ArityException 0 "core/->>"
+threadLast [x] = return x
+threadLast (x : (Fix (EList ys)) : r) = threadLast $ iList (ys ++ [x]) : r
+threadLast (x : y : r) = threadLast $ iList [y, x] : r
+
+threadSnd :: [Expr] -> EvalState Expr
+threadSnd [] = throwError $ ArityException 0 "core/->"
+threadSnd [x] = return x
+threadSnd (x : (Fix (EList ys)) : r)
+  = let (yfst, ysnd) = splitAt 1 ys in
+     threadSnd $ iList (yfst ++ [x] ++ ysnd) : r
+threadSnd (x : y : r) = threadSnd $ iList [y, x] : r
+
 -- I see that these operations can be generalized, but it won't make them easier
 -- to maintain or anything, really.
 
