@@ -4,13 +4,15 @@ module Swearjure.Eval where
 
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Generics.Fixplate (Mu(..))
 import qualified Data.Map as M
 import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Set as S
 import qualified Data.Traversable as T
 import           Prelude hiding (lookup, seq, concat)
-import           Swearjure.AST hiding (specials)
+import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Primitives
 
@@ -53,7 +55,15 @@ apply (f : xs) = do fn <- ifn f
                     let spliced = init xs ++ lastOnes
                     case fn of
                      PrimFn (Prim _ prim) -> prim spliced
-                     (Fn _ _ _ _) -> throwError $ IllegalState "Can't apply nonprimitives yet"
+                     -- NEXT UP:
+                     Fn {} -> throwError $ IllegalState "Can't apply nonprimitives yet"
+
+-- Function:
+--   First find right arity
+--   then fetch env and bind values to exps
+--   then, in sequence, evaluate the expressions and return the last val
+
+-- For later: do some tail recursion tricks.
 
 macroexpand :: Expr -> EvalState Expr
 macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
@@ -73,6 +83,7 @@ eval = macroexpand >=> go . unFix
         go (EList xs)
           | head xs == _quote = return $ fromMaybe _nil (listToMaybe $ tail xs)
           | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
+          | head xs == _fnStar = makeLambda $ tail xs
           | otherwise = do f : xs' <- mapM eval xs
                            apply [f, (Fix (EList xs'))]
         go v@(EVec _) = Fix <$> T.mapM eval v
@@ -84,6 +95,59 @@ eval = macroexpand >=> go . unFix
                             return $ Fix $ EHM evals
         go x = return $ Fix x
         mapMtuple f = mapM (\(x,y) -> (,) <$> f x <*> f y)
+
+makeLambda :: [Expr] -> EvalState Expr
+makeLambda xs = do env <- ask
+                   num <- get
+                   modify (+2)
+                   (recName, rst) <- findName $ map unFix xs
+                   fns <- mkUnsureFn rst
+                   return $ Fix $ EFn $
+                     Fn { fnEnv = env
+                        , fnNs = "user"
+                        , fnName = mungedName recName num
+                        , fnRecName = recName
+                        , fnFns = fns
+                        }
+  where mungedName (Just fname) num = "eval" ++ show num ++ "$" ++ fname ++ "__"
+                                      ++ show (num + 1)
+        mungedName Nothing num = mungedName (Just "fn") num
+        findName ((ESym _ s) : rst)
+          | S.member s specials = throwError $ IllegalArgument
+                                  $ "Can't use " ++ s ++ " as function name"
+          | otherwise = return (Just s, rst)
+        findName r = return (Nothing, r)
+        mkUnsureFn :: [SwjExp Expr] -> EvalState [([String], Maybe String, [Expr])]
+        mkUnsureFn [] = return []
+        mkUnsureFn lst@((EList _) : _) = mkFns lst
+        mkUnsureFn lst@((EVec _) : _) = do fn <- mkFn lst
+                                           return [fn]
+        mkUnsureFn (x : _) = throwError $ CastException (typeName' x) "List/Vector"
+        mkFn ((EVec args') : exprs)
+          = do (args, restArg) <- validateArgs $ map unFix args'
+               return (args, restArg, map Fix exprs)
+        mkFn (x : _) = throwError $ CastException (typeName' x) "Vector"
+        mkFn [] = throwError $ IllegalArgument
+                  "(This gives a NullPointerException in Clojure)"
+        mkFns = mapM (mkFn <=< unList)
+        unList (EList ys) = return $ map unFix ys
+        unList x = throwError $ CastException (typeName' x) "List"
+        validateArgs [] = return ([], Nothing)
+        validateArgs (s@(ESym (Just _) _) : _)
+          = throwError $ IllegalArgument $
+            "Can't use qualified name as parameter: " ++ prStr (Fix s)
+        validateArgs [(ESym Nothing "&"), s@(ESym (Just _) _)]
+          = throwError $ IllegalArgument $
+            "Can't use qualified name as parameter: " ++ prStr (Fix s)
+        validateArgs [(ESym Nothing "&"), (ESym Nothing s)]
+          | s /= "&" = return ([], Just s)
+          | otherwise = throwError $ IllegalArgument "Invalid parameter list"
+        validateArgs ((ESym Nothing s) : args')
+          | s /= "&" = do (args, restArg) <- validateArgs args'
+                          return (s : args, restArg)
+          | otherwise = throwError $ IllegalArgument "Invalid parameter list"
+        validateArgs (x : _) = throwError $ IllegalArgument
+                               $ "Unsupported binding key: " ++ prStr (Fix x)
 
 ifn :: Expr -> EvalState Fn
 ifn = go . unFix

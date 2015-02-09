@@ -67,7 +67,12 @@ getMapping s = if S.member s specials
                               maybe other (namespaced . fst) v
         namespaced ns = return . Just . Fix . ESym (Just ns) $ s
 
-data Fn' e = Fn (Env' e) String String [([String], Maybe String, e)]
+data Fn' e = Fn { fnEnv :: (Env' e)
+                , fnNs :: String
+                , fnName :: String
+                , fnRecName :: Maybe String
+                , fnFns :: [([String], Maybe String, [e])]
+                }
            | PrimFn (PFn Expr)
            deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
@@ -161,8 +166,8 @@ pp' sfn = cata go
         go (EKw ns s) = char ':' <> nsPP ns <> text s
         go (EBool True) = text "true"
         go (EBool False) = text "false"
-        go (EFn (Fn _ ns fname _)) = text "#<" <> text ns <> char '$'
-                                     <> text fname <> char '>'
+        go (EFn Fn { fnNs = ns, fnName = fname})
+          = text "#<" <> text ns <> char '$' <> text fname <> char '>'
         go (EFn (PrimFn (Prim (ns, fname) _)))
           = text "#<" <> text ns <> char '$' <> text fname <> char '>'
         go Nil = text "nil"
@@ -201,3 +206,6 @@ _hashmap = Fix $ ESym (Just "clojure.core") "hash-map"
 
 _nil :: Expr
 _nil = Fix Nil
+
+_fnStar :: Expr
+_fnStar = Fix $ ESym Nothing "fn*"
