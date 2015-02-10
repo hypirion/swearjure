@@ -6,8 +6,8 @@ version:             0.1.0.0
 synopsis:            Clojure without alphanumerics.
 -- description:         
 homepage:            http://www.swearjure.com
-license:             BSD2
-license-file:        LICENSE
+license:             LGPL-3
+license-file:        COPYING.LESSER
 author:              Jean Niklas L'orange
 maintainer:          jeannikl@hypirion.com
 -- copyright:           
