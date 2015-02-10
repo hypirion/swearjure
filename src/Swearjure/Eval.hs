@@ -109,7 +109,8 @@ makeLambda xs = do env <- ask
                    num <- get
                    modify (+2)
                    (recName, rst) <- findName $ map unFix xs
-                   fns <- sortWith (\(x, _, _) -> length x) <$> mkUnsureFn rst
+                   fns <- sortWith (\(x, y, _) -> length x + countMaybe y)
+                          <$> mkUnsureFn rst
                    validateArity $ map (\(x, y, _) -> (length x, y)) fns
                    return $ Fix $ EFn $
                      Fn { fnEnv = env
@@ -169,6 +170,8 @@ makeLambda xs = do env <- ask
                  throwError $ IllegalArgument $ "Can't have fixed arity "
                  ++ "function with more params than variadic function"
         variadicCount ys = length (filter isJust (map snd ys))
+        countMaybe Nothing = 0
+        countMaybe (Just _) = 1
 
 ifn :: Expr -> EvalState Fn
 ifn = go . unFix
