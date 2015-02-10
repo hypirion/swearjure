@@ -53,6 +53,12 @@ lookup s = ask >>= lookupRec
                                         ++ "/" ++ s
                 Nothing -> other
 
+extendEnv :: (MonadReader Env m) => Env -> [(String, Expr)] -> m a -> m a
+extendEnv oldEnv mappingList = local extend
+  where extend _ = Nested oldEnv mapping
+        mapping = M.fromList $ map (\(x, y) -> (x, ("user", (False, y))))
+                  mappingList
+
 specials :: S.Set String
 specials = S.fromList
            ["fn*", "quote", ".", "var", "&", "if", "nil"]

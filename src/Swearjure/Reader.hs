@@ -29,14 +29,17 @@ convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
         -- EvalState
         go (PChar c) = return $ EChar c
         go (PFnLit xs) = do xs' <- replaceFnLits xs
-                            return $ EList $ fnStar : xs'
+                            return $ EList $ _fnStar : xs'
         go (PList xs) = return $ EList xs
         go (PVec xs) = return $ EVec xs
         go (PSet xs) = return $ ESet xs
         -- want this to be Data.Set, but forces eq + ord on Mu/Attr
         go (PHM pairs) = return $ EHM pairs -- Same here, ugh.
+        -- this one should be ran after pfnlit expansion, otherwise we don't
+        -- get correct behaviour when syntax-quoting inside fns :( I think I
+        -- might need to go away from Fixplate and catas, and do stuff preorder
+        -- instead.
         go (PSyntaxQuote x) = unFix <$> syntaxUnquote x
-        fnStar = (Fix . ESym Nothing) "fn*"
 
 splitSym :: String -> (Maybe String, String)
 splitSym "/" = (Nothing, "/")

@@ -54,10 +54,30 @@ apply [_] = throwError $ ArityException 1 "core/apply"
 apply (f : xs) = do fn <- ifn f
                     lastOnes <- seq [last xs]
                     let spliced = init xs ++ lastOnes
-                    case fn of
-                     PrimFn (Prim _ prim) -> prim spliced
-                     -- NEXT UP:
-                     Fn {} -> throwError $ IllegalState "Can't apply nonprimitives yet"
+                    runFn fn spliced
+
+runFn :: Fn -> [Expr]-> EvalState Expr
+runFn f@Fn {fnEnv = env, fnRecName = fname
+           , fnFns = options} args
+  = do (paramNames, restName, exprs) <- findOption (length args) options
+       mapping <- prepMapping paramNames restName args $ recBinding fname
+       extendEnv env mapping (evalAll exprs)
+    where findOption n [] = throwError $ ArityException n (prStr $ Fix $ EFn f)
+          findOption n (opt : rst)
+            | argcPred opt n = return opt
+            | otherwise = findOption n rst
+          argcPred (params, Just _, _) = (length params <=)
+          argcPred (params, Nothing, _) = (length params ==)
+          recBinding (Just x) = [(x, Fix $ EFn f)]
+          recBinding Nothing = []
+          prepMapping (p : ps) r (x : xs) acc = prepMapping ps r xs $ (p, x) : acc
+          prepMapping [] (Just r) xs acc = return $ (r, Fix $ EList xs) : acc
+          prepMapping [] Nothing [] acc = return acc
+          prepMapping _ _ _ _ = throwError $ IllegalState $ "Well, we still have"
+                              ++ " some arguments left, but no values to assign"
+          evalAll exprs = last <$> mapM eval exprs
+runFn (PrimFn (Prim _ prim)) args = prim args
+
 
 -- Function:
 --   First find right arity
@@ -69,6 +89,7 @@ apply (f : xs) = do fn <- ifn f
 macroexpand :: Expr -> EvalState Expr
 macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
   | x == _quote = return lst
+  | x == _fnStar = return lst
   | otherwise = do maybeMacro <- lookupMacro s
                    case maybeMacro of
                     Just macro ->
@@ -112,6 +133,8 @@ makeLambda xs = do env <- ask
                    fns <- sortWith (\(x, y, _) -> length x + countMaybe y)
                           <$> mkUnsureFn rst
                    validateArity $ map (\(x, y, _) -> (length x, y)) fns
+                   -- TODO: Walk the values and verify that symbols and vars can
+                   -- be resolved.
                    return $ Fix $ EFn $
                      Fn { fnEnv = env
                         , fnNs = "user"
