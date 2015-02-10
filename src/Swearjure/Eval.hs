@@ -7,8 +7,9 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Generics.Fixplate (Mu(..))
+import           Data.List (nub, sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (fromMaybe, listToMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe, isJust)
 import qualified Data.Set as S
 import qualified Data.Traversable as T
 import           Prelude hiding (lookup, seq, concat)
@@ -96,12 +97,20 @@ eval = macroexpand >=> go . unFix
         go x = return $ Fix x
         mapMtuple f = mapM (\(x,y) -> (,) <$> f x <*> f y)
 
+-- from GHC.Exts
+
+-- | The 'sortWith' function sorts a list of elements using the
+-- user supplied function to project something out of each element
+sortWith :: Ord b => (a -> b) -> [a] -> [a]
+sortWith f = sortBy (\x y -> compare (f x) (f y))
+
 makeLambda :: [Expr] -> EvalState Expr
 makeLambda xs = do env <- ask
                    num <- get
                    modify (+2)
                    (recName, rst) <- findName $ map unFix xs
-                   fns <- mkUnsureFn rst
+                   fns <- sortWith (\(x, _, _) -> length x) <$> mkUnsureFn rst
+                   validateArity $ map (\(x, y, _) -> (length x, y)) fns
                    return $ Fix $ EFn $
                      Fn { fnEnv = env
                         , fnNs = "user"
@@ -148,6 +157,18 @@ makeLambda xs = do env <- ask
           | otherwise = throwError $ IllegalArgument "Invalid parameter list"
         validateArgs (x : _) = throwError $ IllegalArgument
                                $ "Unsupported binding key: " ++ prStr (Fix x)
+        -- assumes these are sorted by size
+        validateArity ys
+          = do when (1 < variadicCount ys) $
+                 throwError $ IllegalArgument
+                 "Can't have more than 1 variadic overload"
+               when (ys /= nub ys) $ throwError $ IllegalArgument
+                 "Can't have 2 overloads with same arity"
+               when (variadicCount ys == 1 &&
+                     snd (last ys) == Nothing) $
+                 throwError $ IllegalArgument $ "Can't have fixed arity "
+                 ++ "function with more params than variadic function"
+        variadicCount ys = length (filter isJust (map snd ys))
 
 ifn :: Expr -> EvalState Fn
 ifn = go . unFix
