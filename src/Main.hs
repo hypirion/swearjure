@@ -2,11 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import           Control.Applicative ((<$>))
-import           Data.Generics.Fixplate (Mu(..))
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Foldable (toList)
+import           Data.Generics.Fixplate (Mu(..))
 import           Data.Sequence
 import qualified Data.Sequence as S
 import qualified Data.Traversable as T
@@ -17,20 +17,26 @@ import           Swearjure.Errors
 import           Swearjure.Eval (initEnv, eval)
 import           Swearjure.Reader
 import           System.Console.Readline (readline, addHistory)
+import           System.Environment
 import           System.IO (hIsTerminalDevice, stdin)
 
 main :: IO ()
-main = do isTerm <- hIsTerminalDevice stdin
-          if isTerm
-            then interactive
-            else static
+main = do args <- getArgs
+          case args of
+           [x] -> do contents <- readFile x
+                     static contents
+           [] -> do isTerm <- hIsTerminalDevice stdin
+                    if isTerm
+                      then interactive
+                      else do contents <- getContents
+                              static contents
+           _ -> putStrLn "Swearjure, version (+).(*).(+) (aka 0.1.0)"
 
-static :: IO ()
-static = do contents <- getContents
-            let wrap = '[' : contents ++ "]"
-            case staticEval wrap of
-             Just s  -> putStrLn s
-             Nothing -> return ()
+static :: String -> IO ()
+static input = do let wrap = '[' : input ++ "]"
+                  case staticEval wrap of
+                   Just s  -> putStrLn s
+                   Nothing -> return ()
 
 interactive :: IO ()
 interactive = do hist <- readHistory
