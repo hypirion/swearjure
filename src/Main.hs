@@ -12,7 +12,7 @@ import qualified Data.Sequence as S
 import qualified Data.Traversable as T
 import           Filesystem hiding (readFile, writeFile)
 import           Filesystem.Path.CurrentOS
-import           Swearjure.AST (prStr, Expr, EvalState, SwjExp(EVec), _nil)
+import           Swearjure.AST (prStr, Val, EvalState, SwjValF(EVec), _nil)
 import           Swearjure.Errors
 import           Swearjure.Eval (initEnv, eval)
 import           Swearjure.Reader

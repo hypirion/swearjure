@@ -23,12 +23,12 @@ data Env' e = Toplevel (M.Map String (NS, (Bool, e)))
             | Nested (Env' e) (M.Map String (NS, (Bool, e)))
             deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-type Env = Env' Expr
+type Env = Env' Val
 
 -- lookup and lookupMacro would've been namespaced if this was proper clojure,
 -- but you can't refer to same-named values in different namespaces in
 -- Swearjure, so it doesn't matter.
-lookupMacro :: (MonadReader Env m) => String -> m (Maybe Expr)
+lookupMacro :: (MonadReader Env m) => String -> m (Maybe Val)
 lookupMacro s = ask >>= lookupRec
   where lookupRec (Toplevel m) = m `findOr` return Nothing
         lookupRec (Nested up m) = m `findOr` lookupRec up
@@ -40,7 +40,7 @@ lookupMacro s = ask >>= lookupRec
                 Nothing -> other
 
 lookup :: (MonadReader Env m, MonadError SwjError m) =>
-          String -> m Expr
+          String -> m Val
 lookup s = ask >>= lookupRec
   where lookupRec (Toplevel m) = m `findOr` (throwError $ NotFound s)
         lookupRec (Nested up m) = m `findOr` lookupRec up
@@ -53,7 +53,7 @@ lookup s = ask >>= lookupRec
                                         ++ "/" ++ s
                 Nothing -> other
 
-extendEnv :: (MonadReader Env m) => Env -> [(String, Expr)] -> m a -> m a
+extendEnv :: (MonadReader Env m) => Env -> [(String, Val)] -> m a -> m a
 extendEnv oldEnv mappingList = local extend
   where extend _ = Nested oldEnv mapping
         mapping = M.fromList $ map (\(x, y) -> (x, ("user", (False, y))))
@@ -63,7 +63,7 @@ specials :: S.Set String
 specials = S.fromList
            ["fn*", "quote", ".", "var", "&", "if", "nil"]
 
-getMapping :: (MonadReader Env m) => String -> m (Maybe Expr)
+getMapping :: (MonadReader Env m) => String -> m (Maybe Val)
 getMapping s = if S.member s specials
                then return . Just . Fix . ESym Nothing $ s
                else ask >>= lookupRec
@@ -73,13 +73,13 @@ getMapping s = if S.member s specials
                               maybe other (namespaced . fst) v
         namespaced ns = return . Just . Fix . ESym (Just ns) $ s
 
-data Fn' e = Fn { fnEnv :: (Env' e)
+data FnF e = Fn { fnEnv :: (Env' e)
                 , fnNs :: String
                 , fnName :: String
                 , fnRecName :: Maybe String
                 , fnFns :: [([String], Maybe String, [e])]
                 }
-           | PrimFn (PFn Expr)
+           | PrimFn (PFn Val)
            deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 data PFn e = Prim (String, String) ([e] -> EvalState e)
@@ -93,26 +93,26 @@ instance Ord (PFn e) where
 instance Show (PFn e) where
   show (Prim (ns, name) _) = "#<" ++ show ns ++ "$" ++ show name ++ ">"
 
-type Fn = Fn' Expr
+type Fn = FnF Val
 
 -- Again I fail at naming.
-data SwjExp e = ESym (Maybe String) String
-              | EStr String
-              | EInt Integer
-              | ERatio Rational
-              | EFloat Double
-              | EChar Char
-              | EList [e]
-              | EVec [e]
-              | EHM [(e, e)]
-              | ESet [e]
-              | EKw (Maybe String) String
-              | EBool Bool
-              | EFn (Fn' e)
-              | Nil
-              deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+data SwjValF e = ESym (Maybe String) String
+               | EStr String
+               | EInt Integer
+               | ERatio Rational
+               | EFloat Double
+               | EChar Char
+               | EList [e]
+               | EVec [e]
+               | EHM [(e, e)]
+               | ESet [e]
+               | EKw (Maybe String) String
+               | EBool Bool
+               | EFn (FnF e)
+               | Nil
+               deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-typeName' :: SwjExp e -> String
+typeName' :: SwjValF e -> String
 typeName' (ESym _ _) = "Symbol"
 typeName' (EStr _ ) = "String"
 typeName' (EInt _) = "Integer"
@@ -128,28 +128,28 @@ typeName' (EBool _) = "Boolean"
 typeName' (EFn _) = "Fn"
 typeName' Nil = "nil"
 
-typeName :: Expr -> String
+typeName :: Val -> String
 typeName = typeName' . unFix
 
-type Expr = Mu SwjExp
+type Val = Mu SwjValF
 
-iList :: [Expr] -> Expr
+iList :: [Val] -> Val
 iList = Fix . EList
 
-iVec :: [Expr] -> Expr
+iVec :: [Val] -> Val
 iVec = Fix . EVec
 
-iHM :: [(Expr, Expr)] -> Expr
+iHM :: [(Val, Val)] -> Val
 iHM = Fix . EHM
 
-iSet :: [Expr] -> Expr
+iSet :: [Val] -> Val
 iSet = Fix . ESet
 
-instance EqF SwjExp where equalF = (==)
-instance OrdF SwjExp where compareF = compare
-instance ShowF SwjExp where showsPrecF = showsPrec
+instance EqF SwjValF where equalF = (==)
+instance OrdF SwjValF where compareF = compare
+instance ShowF SwjValF where showsPrecF = showsPrec
 
-prStr :: Expr -> String
+prStr :: Val -> String
 prStr = show . pp' sfn
   where sfn str = char '"' <> text (unquote str) <> char '"'
         unquote = concatMap uq
@@ -157,7 +157,7 @@ prStr = show . pp' sfn
         uq '"' = "\\\""
         uq x = [x]
 
-pp' :: (String -> Doc) -> Expr -> Doc
+pp' :: (String -> Doc) -> Val -> Doc
 pp' sfn = cata go
   where go (ESym ns s) = nsPP ns <> text s
         go (EStr s) = sfn s
@@ -180,38 +180,38 @@ pp' sfn = cata go
         nsPP (Just ns) = text ns <> char '/'
         nsPP Nothing = empty
 
-_quote :: Expr
+_quote :: Val
 _quote = Fix $ ESym Nothing "quote"
 
-_unquote :: Expr
+_unquote :: Val
 _unquote = Fix $ ESym (Just "clojure.core") "unquote"
 
-_unquoteSplicing :: Expr
+_unquoteSplicing :: Val
 _unquoteSplicing = Fix $ ESym (Just "clojure.core") "unquote-splicing"
 
-_seq :: Expr
+_seq :: Val
 _seq = Fix $ ESym (Just "clojure.core") "seq"
 
-_concat :: Expr
+_concat :: Val
 _concat = Fix $ ESym (Just "clojure.core") "concat"
 
-_apply :: Expr
+_apply :: Val
 _apply = Fix $ ESym (Just "clojure.core") "apply"
 
-_list :: Expr
+_list :: Val
 _list = Fix $ ESym (Just "clojure.core") "list"
 
-_vector :: Expr
+_vector :: Val
 _vector = Fix $ ESym (Just "clojure.core") "vector"
 
-_hashset :: Expr
+_hashset :: Val
 _hashset = Fix $ ESym (Just "clojure.core") "hash-set"
 
-_hashmap :: Expr
+_hashmap :: Val
 _hashmap = Fix $ ESym (Just "clojure.core") "hash-map"
 
-_nil :: Expr
+_nil :: Val
 _nil = Fix Nil
 
-_fnStar :: Expr
+_fnStar :: Val
 _fnStar = Fix $ ESym Nothing "fn*"

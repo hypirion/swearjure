@@ -48,7 +48,7 @@ initEnv = Toplevel $ M.fromList $ map
           , ("->", threadSnd)
           ]
 
-apply :: [Expr] -> EvalState Expr
+apply :: [Val] -> EvalState Val
 apply [] = throwError $ ArityException 0 "core/apply"
 apply [_] = throwError $ ArityException 1 "core/apply"
 apply (f : xs) = do fn <- ifn f
@@ -56,7 +56,7 @@ apply (f : xs) = do fn <- ifn f
                     let spliced = init xs ++ lastOnes
                     runFn fn spliced
 
-runFn :: Fn -> [Expr]-> EvalState Expr
+runFn :: Fn -> [Val]-> EvalState Val
 runFn f@Fn {fnEnv = env, fnRecName = fname
            , fnFns = options} args
   = do (paramNames, restName, exprs) <- findOption (length args) options
@@ -86,7 +86,7 @@ runFn (PrimFn (Prim _ prim)) args = prim args
 
 -- For later: do some tail recursion tricks.
 
-macroexpand :: Expr -> EvalState Expr
+macroexpand :: Val -> EvalState Val
 macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
   | x == _quote = return lst
   | x == _fnStar = return lst
@@ -98,7 +98,7 @@ macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
                     Nothing -> Fix <$> T.mapM macroexpand (unFix lst)
 macroexpand (Fix x) = Fix <$> T.mapM macroexpand x
 
-eval :: Expr -> EvalState Expr
+eval :: Val -> EvalState Val
 eval = macroexpand >=> go . unFix
   where go (ESym _ s) = lookup s
         go x@(EList []) = return $ Fix x
@@ -125,7 +125,7 @@ eval = macroexpand >=> go . unFix
 sortWith :: Ord b => (a -> b) -> [a] -> [a]
 sortWith f = sortBy (\x y -> compare (f x) (f y))
 
-makeLambda :: [Expr] -> EvalState Expr
+makeLambda :: [Val] -> EvalState Val
 makeLambda xs = do env <- ask
                    num <- get
                    modify (+2)
@@ -150,7 +150,7 @@ makeLambda xs = do env <- ask
                                   $ "Can't use " ++ s ++ " as function name"
           | otherwise = return (Just s, rst)
         findName r = return (Nothing, r)
-        mkUnsureFn :: [SwjExp Expr] -> EvalState [([String], Maybe String, [Expr])]
+        mkUnsureFn :: [SwjValF Val] -> EvalState [([String], Maybe String, [Val])]
         mkUnsureFn [] = return []
         mkUnsureFn lst@((EList _) : _) = mkFns lst
         mkUnsureFn lst@((EVec _) : _) = do fn <- mkFn lst
@@ -196,9 +196,9 @@ makeLambda xs = do env <- ask
         countMaybe Nothing = 0
         countMaybe (Just _) = 1
 
-ifn :: Expr -> EvalState Fn
+ifn :: Val -> EvalState Fn
 ifn = go . unFix
-  where go :: SwjExp Expr -> EvalState Fn
+  where go :: SwjValF Val -> EvalState Fn
         go s@(ESym _ _) = lookupThing s
         go kw@(EKw _ _) = lookupThing kw
         go (EFn f) = return f
@@ -213,7 +213,7 @@ ifn = go . unFix
         lookup1 x = unnamedPrim $ get1Fn . (Fix x :)
         unnamedPrim = return . PrimFn . Prim ("", "")
 
-checkDupe :: [Expr] -> EvalState ()
+checkDupe :: [Val] -> EvalState ()
 checkDupe xs = go S.empty xs
   where go _ [] = return ()
         go s (x : r)

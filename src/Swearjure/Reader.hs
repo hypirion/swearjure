@@ -14,11 +14,11 @@ import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Parser
 
-readExpr :: String -> EvalState (Maybe Expr)
+readVal :: String -> EvalState (Maybe Val)
             -- do you even lift?
-readExpr str = (lift . lift $ readAst str) >>= convertAst
+readVal str = (lift . lift $ readAst str) >>= convertAst
 
-convertAst :: Maybe PVal -> EvalState (Maybe Expr)
+convertAst :: Maybe PVal -> EvalState (Maybe Val)
 convertAst Nothing = return Nothing
 convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
   where go (PSym s) = return $ uncurry ESym $ splitSym s
@@ -48,7 +48,7 @@ splitSym s = case '/' `elemIndex` s of
               Just idx -> let (ns, name) = splitAt idx s in
                            (Just ns, tail name)
 
-replaceFnLits :: [Expr] -> EvalState [Expr]
+replaceFnLits :: [Val] -> EvalState [Val]
 replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
                     (Nothing, Nothing)
   where go (ESym Nothing "%")
@@ -79,7 +79,7 @@ replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
         restArglist (Just rest) = [Fix $ ESym Nothing "&", rest]
         restArglist Nothing = []
 
-syntaxUnquote :: Expr -> EvalState Expr
+syntaxUnquote :: Val -> EvalState Val
 syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
   where go sym@(ESym Nothing s)
           | last s == '#'

@@ -13,7 +13,7 @@ import           Prelude hiding (seq)
 import           Swearjure.AST hiding (lookup)
 import           Swearjure.Errors
 
-getFn :: [Expr] -> EvalState Expr
+getFn :: [Val] -> EvalState Val
 getFn [m, v] = getFn [m, v, Fix Nil]
 getFn [m, k, default'] = find (unFix m) k default'
   where find (ESet vals) v d
@@ -30,7 +30,7 @@ getFn [m, k, default'] = find (unFix m) k default'
         find _ _ d = return d
 getFn x = throwError $ ArityException (length x) "core/get"
 
-get1Fn :: [Expr] -> EvalState Expr
+get1Fn :: [Val] -> EvalState Val
 get1Fn [m, k] = go (unFix m)
   where go (EVec vals)
           = case unFix k of
@@ -46,7 +46,7 @@ get1Fn [m, k] = go (unFix m)
 get1Fn xs = throwError $ ArityException (length xs) (typeName $ head xs)
 
 -- this one must be wrapped properly to use in envs. (liftM (Fix . EList) . seq)
-seq :: [Expr] -> EvalState [Expr]
+seq :: [Val] -> EvalState [Val]
 seq [x] = go (unFix x)
   where go (ESet vals) = return vals
         go (EList vals) = return vals
@@ -59,13 +59,13 @@ seq [x] = go (unFix x)
 seq x = throwError $ ArityException (length x) "core/seq"
 
 -- same as above
-concat :: [Expr] -> EvalState [Expr]
+concat :: [Val] -> EvalState [Val]
 concat xs = foldM prepend [] (reverse xs)
   where prepend acc v = do s <- seq [v]
                            return $ s ++ acc
 
-multiCmp :: (SwjExp Expr -> SwjExp Expr -> EvalState Bool) -> String
-            -> [SwjExp Expr] -> EvalState Expr
+multiCmp :: (SwjValF Val -> SwjValF Val -> EvalState Bool) -> String
+            -> [SwjValF Val] -> EvalState Val
 multiCmp _ fname [] = throwError $ ArityException 0 fname
 multiCmp _ _ [_] = return $ Fix $ EBool True
 multiCmp f _ [x, y] = liftM (Fix . EBool) $ f x y
@@ -74,7 +74,7 @@ multiCmp f fname (a : b : r) = do res <- f a b
                                     then multiCmp f fname (b : r)
                                     else return $ Fix $ EBool False
 
-numOp :: (forall a. Ord a => a -> a -> Bool) -> SwjExp Expr -> SwjExp Expr
+numOp :: (forall a. Ord a => a -> a -> Bool) -> SwjValF Val -> SwjValF Val
          -> EvalState Bool
 numOp op = cmp
   where cmp (EInt x) (EInt y) = return $ x `op` y
@@ -90,22 +90,22 @@ numOp op = cmp
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
-lt :: [Expr] -> EvalState Expr
+lt :: [Val] -> EvalState Val
 lt = multiCmp (numOp (<)) "core/<" . map unFix
 
-lte :: [Expr] -> EvalState Expr
+lte :: [Val] -> EvalState Val
 lte = multiCmp (numOp (<=)) "core/<=" . map unFix
 
-gt :: [Expr] -> EvalState Expr
+gt :: [Val] -> EvalState Val
 gt = multiCmp (numOp (>)) "core/>" . map unFix
 
-gte :: [Expr] -> EvalState Expr
+gte :: [Val] -> EvalState Val
 gte = multiCmp (numOp (>=)) "core/>=" . map unFix
 
-numEq :: [Expr] -> EvalState Expr
+numEq :: [Val] -> EvalState Val
 numEq = multiCmp (numOp (==)) "core/==" . map unFix
 
-eq :: [Expr] -> EvalState Expr
+eq :: [Val] -> EvalState Val
 eq [] = throwError $ ArityException 0 "core/="
 eq [_] = return $ Fix $ EBool True
 eq (x : y : r) = if x == y
@@ -114,26 +114,26 @@ eq (x : y : r) = if x == y
 
 -- hash-map and hash-set
 
-hashMap :: [Expr] -> EvalState Expr
+hashMap :: [Val] -> EvalState Val
 hashMap xs = Fix . EHM . M.toList <$> go M.empty xs
   where go m [] = return m
         go _ [k] = throwError $ IllegalArgument $ "No value supplied for key: " ++ prStr k
         go m (k : v : kvs) = go (M.insert k v m) kvs
 
-hashSet :: [Expr] -> EvalState Expr
+hashSet :: [Val] -> EvalState Val
 hashSet xs = Fix . ESet . S.toList <$> go S.empty xs
   where go s [] = return s
         go s (v : vs) = go (S.insert v s) vs
 
 -- ->> and ->
 
-threadLast :: [Expr] -> EvalState Expr
+threadLast :: [Val] -> EvalState Val
 threadLast [] = throwError $ ArityException 0 "core/->>"
 threadLast [x] = return x
 threadLast (x : (Fix (EList ys)) : r) = threadLast $ iList (ys ++ [x]) : r
 threadLast (x : y : r) = threadLast $ iList [y, x] : r
 
-threadSnd :: [Expr] -> EvalState Expr
+threadSnd :: [Val] -> EvalState Val
 threadSnd [] = throwError $ ArityException 0 "core/->"
 threadSnd [x] = return x
 threadSnd (x : (Fix (EList ys)) : r)
@@ -144,7 +144,7 @@ threadSnd (x : y : r) = threadSnd $ iList [y, x] : r
 -- I see that these operations can be generalized, but it won't make them easier
 -- to maintain or anything, really.
 
-plus :: [Expr] -> EvalState Expr
+plus :: [Val] -> EvalState Val
 plus xs = Fix <$> foldM (|+|) (EInt 0) (map unFix xs)
   where (EInt x) |+| (EInt y) = return $ EInt (x + y)
         (EInt x) |+| (EFloat y) = return $ EFloat (fromIntegral x + y)
@@ -159,7 +159,7 @@ plus xs = Fix <$> foldM (|+|) (EInt 0) (map unFix xs)
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
-minus :: [Expr] -> EvalState Expr
+minus :: [Val] -> EvalState Val
 minus [] = throwError $ ArityException 0 "core/-"
 minus [x] = minus [Fix (EInt 0), x]
 minus (x' : xs) = Fix <$> foldM (|-|) (unFix x') (map unFix xs)
@@ -176,7 +176,7 @@ minus (x' : xs) = Fix <$> foldM (|-|) (unFix x') (map unFix xs)
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
-mul :: [Expr] -> EvalState Expr
+mul :: [Val] -> EvalState Val
 mul xs = Fix <$> foldM (|*|) (EInt 1) (map unFix xs)
   where (EInt x) |*| (EInt y) = return $ EInt (x * y)
         (EInt x) |*| (EFloat y) = return $ EFloat (fromIntegral x * y)
@@ -191,7 +191,7 @@ mul xs = Fix <$> foldM (|*|) (EInt 1) (map unFix xs)
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
-divFn :: [Expr] -> EvalState Expr
+divFn :: [Val] -> EvalState Val
 divFn [] = throwError $ ArityException 0 "core//"
 divFn [x] = divFn [Fix (EInt 1), x]
 divFn (x' : xs) = Fix <$> foldM divide (unFix x') (map unFix xs)
@@ -209,13 +209,13 @@ divFn (x' : xs) = Fix <$> foldM divide (unFix x') (map unFix xs)
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
-safeRat :: Integer -> Integer -> EvalState (SwjExp e)
+safeRat :: Integer -> Integer -> EvalState (SwjValF e)
 safeRat num den = case den of
                    0 -> throwError $ IllegalArgument "Cannot divide by 0"
                    _ -> unRatio (num % den)
 
 
-unRatio :: Rational -> EvalState (SwjExp e)
+unRatio :: Rational -> EvalState (SwjValF e)
 unRatio rat = return (case denominator rat of
                        1 -> EInt $ numerator rat
                        _ -> ERatio rat)
@@ -223,7 +223,7 @@ unRatio rat = return (case denominator rat of
 asFloat :: Rational -> Double
 asFloat rat = fromIntegral (numerator rat) / fromIntegral (denominator rat)
 
-isNum :: SwjExp e -> Bool
+isNum :: SwjValF e -> Bool
 isNum (EInt _) = True
 isNum (EFloat _) = True
 isNum (ERatio _) = True

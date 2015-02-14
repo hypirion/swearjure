@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 
 module Swearjure.Parser
-       ( ParseVal(..)
+       ( PValF(..)
        , PVal
        , readAst
        ) where
@@ -18,22 +18,22 @@ import Text.ParserCombinators.Parsec
 
 type SwjParser = GenParser Char Bool
 
-data ParseVal p = PSym String
-                | PString String
-                | PKw String
-                | PQualKw String
-                | PChar Char
-                | PFnLit [p]
-                | PList [p]
-                | PVec [p]
-                | PSet [p] -- Sharpie!
-                | PHM [(p, p)]
-                | PSyntaxQuote p
-                deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
+data PValF p = PSym String
+             | PString String
+             | PKw String
+             | PQualKw String
+             | PChar Char
+             | PFnLit [p]
+             | PList [p]
+             | PVec [p]
+             | PSet [p] -- Sharpie!
+             | PHM [(p, p)]
+             | PSyntaxQuote p
+             deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-type PVal = Mu ParseVal
+type PVal = Mu PValF
 
-instance ShowF ParseVal where showsPrecF = showsPrec
+instance ShowF PValF where showsPrecF = showsPrec
 
 cljns :: String
 cljns = "clojure.core/"
