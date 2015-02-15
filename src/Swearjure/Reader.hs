@@ -2,10 +2,11 @@
 
 module Swearjure.Reader where
 
-import           Control.Applicative ((<$>))
+import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Generics.Fixplate hiding (mapM)
+import qualified Data.Generics.Fixplate as F
 import           Data.List (elemIndex)
 import qualified Data.Map as M
 import           Data.Maybe (maybeToList, fromMaybe)
@@ -15,30 +16,30 @@ import           Swearjure.Errors
 import           Swearjure.Parser
 
 readVal :: String -> EvalState (Maybe Val)
-readVal str = readAst str >>= convertAst
+readVal str = readAst str >>= traverse replaceFnLits >>= traverse convertAst
 
-convertAst :: Maybe PVal -> EvalState (Maybe Val)
-convertAst Nothing = return Nothing
-convertAst (Just ast) = Just <$> cataM (liftM Fix . go) ast
-  where go (PSym s) = return $ uncurry ESym $ splitSym s
-        go (PString s) = return $ EStr s
-        go (PKw s) = return $ uncurry EKw $ splitSym s
-        go (PQualKw s) = return $ EKw (Just "user") s
+convertAst :: PVal -> EvalState Val
+convertAst ast = go ast
+  where go :: PVal -> EvalState Val
+        go = liftM Fix . goF . unFix
+        goF :: PValF PVal -> EvalState (SwjValF Val)
+        goF (PSym s) = return $ uncurry ESym $ splitSym s
+        goF (PString s) = return $ EStr s
+        goF (PKw s) = return $ uncurry EKw $ splitSym s
+        goF (PQualKw s) = return $ EKw (Just "user") s
         -- -^ if we could move nses, this would've forced this fn to be of
         -- EvalState
-        go (PChar c) = return $ EChar c
-        go (PFnLit xs) = do xs' <- replaceFnLits xs
-                            return $ EList $ _fnStar : xs'
-        go (PList xs) = return $ EList xs
-        go (PVec xs) = return $ EVec xs
-        go (PSet xs) = return $ ESet xs
+        goF (PChar c) = return $ EChar c
+        -- TODO: Go over to compdata. Excellent fit here actually, as this
+        -- traversal is over a desugared ast.
+        goF (PFnLit _) = throwError $ IllegalState $ "Internal error: Function "
+                         ++ "literals should've been eradicated by now"
+        goF (PList xs) = EList <$> mapM go xs
+        goF (PVec xs) = EVec <$> mapM go xs
+        goF (PSet xs) = ESet <$> mapM go xs
         -- want this to be Data.Set, but forces eq + ord on Mu/Attr
-        go (PHM pairs) = return $ EHM pairs -- Same here, ugh.
-        -- this one should be ran after pfnlit expansion, otherwise we don't
-        -- get correct behaviour when syntax-quoting inside fns :( I think I
-        -- might need to go away from Fixplate and catas, and do stuff preorder
-        -- instead.
-        go (PSyntaxQuote x) = unFix <$> syntaxUnquote x
+        goF (PHM pairs) = EHM <$> mapM (\(x, y) -> (,) <$> go x <*> go y) pairs
+        goF (PSyntaxQuote x) = syntaxUnquote x >>= goF
 
 splitSym :: String -> (Maybe String, String)
 splitSym "/" = (Nothing, "/")
@@ -47,10 +48,16 @@ splitSym s = case '/' `elemIndex` s of
               Just idx -> let (ns, name) = splitAt idx s in
                            (Just ns, tail name)
 
-replaceFnLits :: [Val] -> EvalState [Val]
-replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
+replaceFnLits :: PVal -> EvalState PVal
+replaceFnLits (Fix (PFnLit xs'))
+  = do xs <- replacePercents xs'
+       return $ Fix $ PList $ (Fix $ PSym "fn*") : xs
+replaceFnLits (Fix x) = Fix <$> F.mapM replaceFnLits x
+
+replacePercents :: [PVal] -> EvalState [PVal]
+replacePercents e = prepareArglist <$> runStateT (mapM (cataM go) e)
                     (Nothing, Nothing)
-  where go (ESym Nothing "%")
+  where go (PSym "%")
           = do (p1, r) <- get
                case p1 of
                 Nothing -> do cnt <- lift get
@@ -59,7 +66,7 @@ replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
                               put (Just p1s, r)
                               return p1s
                 (Just p1s) -> return p1s
-        go (ESym Nothing "%&")
+        go (PSym "%&")
           = do (p1, r) <- get
                case r of
                 Nothing -> do cnt <- lift get
@@ -69,18 +76,19 @@ replaceFnLits e = prepareArglist <$> runStateT (mapM (cataM go) e)
                               return rsym
                 (Just rsym) -> return rsym
         go x = return $ Fix x
-        p1sym cnt = Fix $ ESym Nothing $ "p1__" ++ show cnt ++ "#"
-        restSym cnt = Fix $ ESym Nothing $ "rest__" ++ show cnt ++ "#"
+        p1sym cnt = Fix $ PSym $ "p1__" ++ show cnt ++ "#"
+        restSym cnt = Fix $ PSym $ "rest__" ++ show cnt ++ "#"
         prepareArglist (es, (p1, rest))
           = let arglist = maybeToList p1 ++ restArglist rest in
-             [ (Fix . EVec) arglist
-             , (Fix . EList) es]
-        restArglist (Just rest) = [Fix $ ESym Nothing "&", rest]
+             [ (Fix . PVec) arglist
+             , (Fix . PList) es]
+        restArglist (Just rest) = [Fix $ PSym "&", rest]
         restArglist Nothing = []
 
-syntaxUnquote :: Val -> EvalState Val
+syntaxUnquote :: PVal -> EvalState (PValF PVal)
 syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
-  where go sym@(ESym Nothing s)
+  where go :: PValF PVal -> StateT (M.Map String (PValF PVal)) EvalState (PValF PVal)
+        go sym@(PSym s)
           | last s == '#'
              = do r <- gets (M.lookup s)
                   case r of
@@ -88,45 +96,60 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
                    Nothing ->
                      do symCnt <- lift get
                         lift $ modify succ
-                        let gsym = iList [_quote, gensym s symCnt]
+                        let gsym = PList [_pquote, gensym s symCnt]
                         modify $ M.insert s gsym
                         return gsym
           | last s == '.' = throwError $ IllegalState "expansion of class ctors not implemented yet"
-          | head s == '.' = return $ iList [_quote, Fix sym]
-          | otherwise = do newSym <- fromMaybe (Fix $ ESym (Just "user") s)
-                                     <$> getMapping s
-                           return $ iList [_quote, newSym]
-        go sym@(ESym _ _) = return $ iList [_quote, Fix sym]
-        go lst@(EList []) = return $ Fix lst
-        go (EList xs)
-          | head xs == _unquote = return (xs !! 1)
-          | head xs == _unquoteSplicing
+          | head s == '.' = return $ PList [_pquote, Fix sym]
+          | fst (splitSym s) /= Nothing = return $ PList [_pquote, Fix sym]
+          | otherwise = do newSym <- fromMaybe (Fix $ PSym $ "user/" ++ s)
+                                     <$> (liftM (fmap $ Fix . deSym . unFix) $
+                                          getMapping s)
+                           return $ PList [_pquote, newSym]
+        go lst@(PList []) = return $ lst
+        go (PList xs)
+          | head xs == _punquote = return $ unFix $ xs !! 1
+          | head xs == _punquoteSplicing
                = throwError $ IllegalState "splice not in list"
           | otherwise = do seq <- sqExpand xs
-                           return $ iList [_seq, iList $ _concat : seq]
-        go (EVec xs)
+                           return $ PList [_pseq, iPList $ _pconcat : seq]
+        go (PVec xs)
           = do seq <- sqExpand xs
-               return $ iList [_apply, _vector,
-                               iList [_seq, iList $ _concat : seq]]
-        go (ESet xs)
+               return $ PList [_papply, _pvector,
+                               iPList [_pseq, iPList $ _pconcat : seq]]
+        go (PSet xs)
           = do seq <- sqExpand xs
-               return $ iList [_apply, _hashset,
-                               iList [_seq, iList $ _concat : seq]]
-        go (EHM pairs)
+               return $ PList [_papply, _phashset,
+                               iPList [_pseq, iPList $ _pconcat : seq]]
+        go (PHM pairs)
           = do seq <- sqExpand (unpair pairs)
-               return $ iList [_apply, _hashmap,
-                               iList [_seq, iList $ _concat : seq]]
-        go x = return $ Fix x
+               return $ PList [_papply, _phashmap,
+                               iPList [_pseq, iPList $ _pconcat : seq]]
+        go x = return x
         sqExpand = mapM (listGo . unFix)
-        listGo lst@(EList []) = return $ iList [_list, Fix lst]
-        listGo ls@(EList xs)
-          | head xs == _unquote = return $ iList [_list, xs !! 1]
-          | head xs == _unquoteSplicing
+        listGo lst@(PList []) = return $ iPList [_plist, Fix lst]
+        listGo ls@(PList xs)
+          | head xs == _punquote = return $ iPList [_plist, xs !! 1]
+          | head xs == _punquoteSplicing
                = return $ xs !! 1
           | otherwise = do squote <- go ls
-                           return $ iList [_list, squote]
+                           return $ iPList [_plist, Fix squote]
         listGo x = do squote <- go x
-                      return $ iList [_list, squote]
+                      return $ iPList [_plist, Fix squote]
         unpair = concatMap (\(x,y) -> [x, y])
-        gensym s cnt = Fix $ ESym Nothing $ init s ++ "__"
+        gensym s cnt = Fix $ PSym $ init s ++ "__"
                        ++ show cnt ++ "__auto__"
+        -- TODO: This is hacky.
+        _pquote = Fix $ PSym "quote"
+        _punquote = Fix $ PSym "clojure.core/unquote"
+        _punquoteSplicing = Fix $ PSym "clojure.core/unquote-splicing"
+        _pconcat = Fix $ PSym "clojure.core/concat"
+        _papply = Fix $ PSym "clojure.core/apply"
+        _pvector = Fix $ PSym "clojure.core/vector"
+        _phashmap = Fix $ PSym "clojure.core/hash-map"
+        _phashset = Fix $ PSym "clojure.core/hash-set"
+        _plist = Fix $ PSym "clojure.core/list"
+        _pseq =  Fix $ PSym "clojure.core/seq"
+        deSym (ESym a b) = PSym $ (maybe "" (++ "/") a) ++ b
+        deSym _ = error "getMapping returned non-sym back"
+        iPList = Fix . PList

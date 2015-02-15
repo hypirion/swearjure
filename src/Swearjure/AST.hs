@@ -19,11 +19,11 @@ type EvalState = ReaderT Env (StateT Int (ExceptT SwjError IO))
 
 type NS = String
 
-data Env' e = Toplevel (M.Map String (NS, (Bool, e)))
-            | Nested (Env' e) (M.Map String (NS, (Bool, e)))
+data EnvF e = Toplevel (M.Map String (NS, (Bool, e)))
+            | Nested (EnvF e) (M.Map String (NS, (Bool, e)))
             deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-type Env = Env' Val
+type Env = EnvF Val
 
 -- lookup and lookupMacro would've been namespaced if this was proper clojure,
 -- but you can't refer to same-named values in different namespaces in
@@ -49,7 +49,7 @@ lookup s = ask >>= lookupRec
                case v of
                 Just (_, (False, val)) -> return val
                 Just (ns, (True, _)) -> throwError $ IllegalArgument $
-                                        "Can't take value of a macro: #'" ++ ns
+                                        "Can't take value of macro: #'" ++ ns
                                         ++ "/" ++ s
                 Nothing -> other
 
@@ -73,7 +73,7 @@ getMapping s = if S.member s specials
                               maybe other (namespaced . fst) v
         namespaced ns = return . Just . Fix . ESym (Just ns) $ s
 
-data FnF e = Fn { fnEnv :: (Env' e)
+data FnF e = Fn { fnEnv :: (EnvF e)
                 , fnNs :: String
                 , fnName :: String
                 , fnRecName :: Maybe String
@@ -95,7 +95,6 @@ instance Show (PFn e) where
 
 type Fn = FnF Val
 
--- Again I fail at naming.
 data SwjValF e = ESym (Maybe String) String
                | EStr String
                | EInt Integer

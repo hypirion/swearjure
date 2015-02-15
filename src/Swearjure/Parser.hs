@@ -12,7 +12,7 @@ import Control.Applicative hiding (many, (<|>))
 import Control.Monad.Except
 import Data.Char (isAlphaNum)
 import Data.Foldable (Foldable)
-import Data.Generics.Fixplate (Mu(..), ShowF(..))
+import Data.Generics.Fixplate (Mu(..), ShowF(..), EqF(..), OrdF(..))
 import Data.Traversable (Traversable)
 import Swearjure.Errors
 import Text.ParserCombinators.Parsec
@@ -27,13 +27,15 @@ data PValF p = PSym String
              | PFnLit [p]
              | PList [p]
              | PVec [p]
-             | PSet [p] -- Sharpie!
+             | PSet [p]
              | PHM [(p, p)]
              | PSyntaxQuote p
              deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 type PVal = Mu PValF
 
+instance EqF PValF where equalF = (==)
+instance OrdF PValF where compareF = compare
 instance ShowF PValF where showsPrecF = showsPrec
 
 cljns :: String
@@ -76,6 +78,8 @@ startSymChar = oneOf "+-*/!=<>?_&$%"
 symChar :: SwjParser Char
 symChar = startSymChar <|> oneOf "#'"
 
+-- TODO: If sym only contains single /, then / can't be the last value UNLESS
+-- the symbol is "/".
 symString :: SwjParser String
 symString = do x <- startSymChar
                xs <- many symChar
@@ -124,8 +128,6 @@ quote = do (omit . lexeme . char) '\''
            e <- expr
            return $ call "quote" [e]
 
--- Alright, this is obv. wrong. Need to look into the reader properly, because
--- it does some fancy read time replacement.
 syntaxQuote :: SwjParser PVal
 syntaxQuote = char '`' >> (Fix . PSyntaxQuote <$> expr)
 
