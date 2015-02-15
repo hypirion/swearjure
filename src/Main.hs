@@ -23,6 +23,9 @@ import           System.IO (hIsTerminalDevice, stdin)
 main :: IO ()
 main = do args <- getArgs
           case args of
+           ["-h"] -> banner
+           ["-?"] -> banner
+           ["--help"] -> banner
            [x] -> do contents <- readFile x
                      static contents
            [] -> do isTerm <- hIsTerminalDevice stdin
@@ -30,7 +33,10 @@ main = do args <- getArgs
                       then interactive
                       else do contents <- getContents
                               static contents
-           _ -> putStrLn "Swearjure, version (+).(*).(+) (aka 0.1.0)"
+           _ -> banner
+
+banner :: IO ()
+banner = putStrLn $ "Swearjure, version (+).(*).(+) (aka 0.1.0)"
 
 static :: String -> IO ()
 static input = do let wrap = '[' : input ++ "]"
@@ -72,8 +78,8 @@ staticEval s = case runExcept (runStateT (runReaderT (maybeEval s) initEnv) 1) o
           Right (Just _, _) -> Nothing
           Right (Nothing, _) -> Nothing
 
-maybeEval :: String -> EvalState (Maybe Expr)
-maybeEval s = readExpr s >>= T.mapM eval
+maybeEval :: String -> EvalState (Maybe Val)
+maybeEval s = readVal s >>= T.mapM eval
 
 readHistory :: IO (Seq String)
 readHistory = do hdir <- getAppDataDirectory "swearjure"
