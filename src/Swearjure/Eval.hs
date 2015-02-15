@@ -78,12 +78,6 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
           evalAll exprs = last <$> mapM eval exprs
 runFn (PrimFn (Prim _ prim)) args = prim args
 
-
--- Function:
---   First find right arity
---   then fetch env and bind values to exps
---   then, in sequence, evaluate the expressions and return the last val
-
 -- For later: do some tail recursion tricks.
 
 macroexpand :: Val -> EvalState Val

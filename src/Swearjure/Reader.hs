@@ -15,8 +15,7 @@ import           Swearjure.Errors
 import           Swearjure.Parser
 
 readVal :: String -> EvalState (Maybe Val)
-            -- do you even lift?
-readVal str = (lift . lift $ readAst str) >>= convertAst
+readVal str = readAst str >>= convertAst
 
 convertAst :: Maybe PVal -> EvalState (Maybe Val)
 convertAst Nothing = return Nothing

@@ -40,7 +40,8 @@ banner = putStrLn $ "Swearjure, version (+).(*).(+) (aka 0.1.0)"
 
 static :: String -> IO ()
 static input = do let wrap = '[' : input ++ "]"
-                  case staticEval wrap of
+                  ev <- staticEval wrap
+                  case ev of
                    Just s  -> putStrLn s
                    Nothing -> return ()
 
@@ -57,26 +58,28 @@ loop gsymCount
         Just str ->
           do liftIO $ addHistory str
              modify (|> str)
-             let (res, symCount) = (re gsymCount str)
+             (res, symCount) <- liftIO $ re gsymCount str
              case res of
               Just x -> liftIO $ putStrLn x
               Nothing -> return ()
              loop symCount
 
-re :: Int -> String -> (Maybe String, Int)
-re n s = case runExcept (runStateT (runReaderT (maybeEval s) initEnv) n) of
-          Left err -> (Just $ errString err, n)
-          Right (Just x, n') -> (Just $ prStr x, n')
-          Right (Nothing, n') -> (Nothing, n')
+re :: Int -> String -> IO (Maybe String, Int)
+re n s = do res <- runExceptT (runStateT (runReaderT (maybeEval s) initEnv) n)
+            case res of
+             Left err -> return (Just $ errString err, n)
+             Right (Just x, n') -> return (Just $ prStr x, n')
+             Right (Nothing, n') -> return (Nothing, n')
 
 -- return last element of the vec
-staticEval :: String -> Maybe String
-staticEval s = case runExcept (runStateT (runReaderT (maybeEval s) initEnv) 1) of
-          Left err -> Just $ errString err
-          Right (Just (Fix (EVec xs)), _)
-            | last xs /= _nil -> Just $ prStr (last xs)
-          Right (Just _, _) -> Nothing
-          Right (Nothing, _) -> Nothing
+staticEval :: String -> IO (Maybe String)
+staticEval s = do res <- runExceptT (runStateT (runReaderT (maybeEval s) initEnv) 1)
+                  case res of
+                   Left err -> return $ Just $ errString err
+                   Right (Just (Fix (EVec xs)), _)
+                     | last xs /= _nil -> return $ Just $ prStr (last xs)
+                   Right (Just _, _) -> return Nothing
+                   Right (Nothing, _) -> return Nothing
 
 maybeEval :: String -> EvalState (Maybe Val)
 maybeEval s = readVal s >>= T.mapM eval

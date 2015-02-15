@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall -Werror #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Swearjure.Parser
        ( PValF(..)
@@ -185,7 +186,7 @@ expr = list <|> vec <|> symbol <|> keyword <|> malString <|> hashMap
        <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp <|> character
        <|> alphaNums
 
-readAst :: String -> Except SwjError (Maybe PVal)
+readAst :: (MonadError SwjError m) => String -> m (Maybe PVal)
 readAst s = throwLeftMap SyntaxError $
              runParser (whiteSpace >> optionMaybe expr <* eof) False "" s
   where throwLeftMap f (Left x) = throwError (f x)

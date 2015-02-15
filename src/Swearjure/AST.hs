@@ -15,7 +15,7 @@ import           Swearjure.Errors
 import           Text.PrettyPrint
 
 
-type EvalState = ReaderT Env (StateT Int (Except SwjError))
+type EvalState = ReaderT Env (StateT Int (ExceptT SwjError IO))
 
 type NS = String
 
