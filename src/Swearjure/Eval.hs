@@ -47,6 +47,14 @@ initEnv = Toplevel $ M.fromList $ map
           [ ("->>", threadLast)
           , ("->", threadSnd)
           ]
+          ++ map
+          (\(fname, f) -> (fname, ("swearjure.core",
+                                   (False, Fix $ EFn $ PrimFn
+                                           (Prim ("swearjure.core", fname) f)))))
+          [ ("<<'", readChar)
+          , (">>'", prChars)
+          , (">>", prn)
+          ]
 
 apply :: [Val] -> EvalState Val
 apply [] = throwError $ ArityException 0 "core/apply"

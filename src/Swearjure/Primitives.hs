@@ -5,6 +5,7 @@ module Swearjure.Primitives where
 
 import           Control.Applicative ((<$>))
 import           Control.Monad.Except
+import           Data.Char (chr, ord)
 import           Data.Generics.Fixplate
 import qualified Data.Map as M
 import           Data.Ratio
@@ -12,6 +13,7 @@ import qualified Data.Set as S
 import           Prelude hiding (seq)
 import           Swearjure.AST hiding (lookup)
 import           Swearjure.Errors
+import           System.IO
 
 getFn :: [Val] -> EvalState Val
 getFn [m, v] = getFn [m, v, Fix Nil]
@@ -130,13 +132,13 @@ hashSet xs = Fix . ESet . S.toList <$> go S.empty xs
 threadLast :: [Val] -> EvalState Val
 threadLast [] = throwError $ ArityException 0 "core/->>"
 threadLast [x] = return x
-threadLast (x : (Fix (EList ys)) : r) = threadLast $ iList (ys ++ [x]) : r
+threadLast (x : Fix (EList ys) : r) = threadLast $ iList (ys ++ [x]) : r
 threadLast (x : y : r) = threadLast $ iList [y, x] : r
 
 threadSnd :: [Val] -> EvalState Val
 threadSnd [] = throwError $ ArityException 0 "core/->"
 threadSnd [x] = return x
-threadSnd (x : (Fix (EList ys)) : r)
+threadSnd (x : Fix (EList ys) : r)
   = let (yfst, ysnd) = splitAt 1 ys in
      threadSnd $ iList (yfst ++ [x] ++ ysnd) : r
 threadSnd (x : y : r) = threadSnd $ iList [y, x] : r
@@ -209,11 +211,27 @@ divFn (x' : xs) = Fix <$> foldM divide (unFix x') (map unFix xs)
           | isNum x = throwError $ CastException (typeName' y) "Number"
           | otherwise = throwError $ CastException (typeName' x) "Number"
 
+prChars :: [Val] -> EvalState Val
+prChars [] = return $ Fix Nil
+prChars (Fix (EInt n) : xs) = do liftIO $ putChar (chr $ fromIntegral n)
+                                 liftIO $ hFlush stdout
+                                 prChars xs
+prChars (x : _) = throwError $ CastException (typeName x) "Integer"
+
+readChar :: [a] -> EvalState Val
+readChar [] = do n <- ord <$> liftIO getChar
+                 return $ Fix $ EInt (toInteger n)
+readChar xs = throwError $ ArityException (length xs) "swearjure.core/<<'"
+
+prn :: [Val] -> EvalState Val
+prn xs = do let printString = unwords $ map prStr xs
+            liftIO $ putStrLn printString
+            return $ Fix Nil
+
 safeRat :: Integer -> Integer -> EvalState (SwjValF e)
 safeRat num den = case den of
                    0 -> throwError $ IllegalArgument "Cannot divide by 0"
                    _ -> unRatio (num % den)
-
 
 unRatio :: Rational -> EvalState (SwjValF e)
 unRatio rat = return (case denominator rat of
