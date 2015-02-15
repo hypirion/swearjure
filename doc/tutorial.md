@@ -2,7 +2,8 @@
 
 Hello, and welcome to the Swearjure tutorial! This will give you basic knowledge
 on how to make working Swearjure programs. You should have some familiarity with
-basic Clojure, but you don't have to be an expert.
+basic Clojure, but you don't have to be an expert. It would probably help to
+know how syntax-quoting works, especially unquote and unquote-splicing.
 
 ## Installing
 
@@ -78,7 +79,177 @@ Swearjure, version (+).(*).(+)-SNAPSHOT (aka 0.1.0-SNAPSHOT)
 
 ## Numbers
 
-## Looking up values
+The most essential type of value in Swearjure is an integer. Let's make some:
+
+```clojure
+swj> 10
+(line 1, column 2):
+Alphanumeric characters are not allowed
+swj> 0
+(line 1, column 2):
+Alphanumeric characters are not allowed
+```
+
+Oh, right. In Swearjure, you're not allowed to use any alphanumeric characters
+whatsoever. Of course, this means that we can't create integers by just writing
+them down. Instead, we have to use arithmetic operators `+`, `-`, `*` and `/`.
+But how can we use them if we don't have any numbers to use them on? The answer
+lies within `+` and `*`:
+
+```clojure
+swj> (+)
+0
+swj> (*)
+1
+```
+
+Clojure's `+` function returns 0 if given no arguments, and `*` returns 1. The
+reasons has to do with
+[monoids](https://gist.github.com/igstan/c3797e51aa0784a5d275), which is
+interesting in and of itself, but not that relevant for Swearjure.
+
+Now we can create any kind of integer we want by just adding together `(*)`s:
+
+```clojure
+swj> (+ (*) (*))
+2
+swj> (+ (*) (*) (*) (*))
+4
+```
+
+We can also do more complex things, where we perform multiplication or
+subtraction. Here, for instance, is (2 * 2) - 1:
+
+```clojure
+swj> (- (* (+ (*) (*)) (+ (*) (*))) (*))
+3
+```
+
+We can also create ratios by using `/`:
+
+```clojure
+swj> (/ (*) (+ (*) (*) (*)))
+1/3
+swj> (/ (+ (*) (*)) (+ (*) (*) (*) (*)))
+1/2 ; shortened version of 2/4
+```
+
+And that's essentially all the tricks you need to know on how to create numbers
+in Swearjure. We will sometimes, to make life easier, write `` `1`` or `` `12``
+instead of expressions that evaluate to those numbers later on. It would be
+pretty hard to follow what's happening if we don't!
+
+## Creating and Looking up Elements in Collections
+
+Now we have numbers, so let's take a look at collections. Since all the
+collections (list, vectors, maps and sets) have literal versions, we can just
+use those:
+
+```clojure
+swj> '(+ - *)
+(+ - *)
+swj> [+ - *]
+[#<core$+> #<core$-> #<core$*>]
+swj> {:+ :-}
+{:+ :-}
+swj> #{+ :+ (*)}
+#{#<core$+> :+ 1}
+```
+
+We don't frequently use lists in Swearjure, but if you want to use it in its
+unquoted form, you have to use syntax-quoting:
+
+```clojure
+swj> `(~+ ~- ~*)
+(#<core$+> #<core$-> #<core$*>)
+swj> ;; or, which is a neat trick and might be easier to use:
+swj> `(~@[+ - *])
+(#<core$+> #<core$-> #<core$*>)
+```
+
+Oh, right, I forgot to mention: You can actually use alphanumerics in comments.
+As they don't change the semantics of a program, you don't break Swearjure laws
+by using them.
+
+If you're a bit unfamiliar with syntax-quote, you can always quote the
+expression to see what it actually evaluates to. It might be helpful if you're
+confused by something:
+
+```clojure
+swj> '`(~+ ~- ~*)
+(clojure.core/seq (clojure.core/concat (clojure.core/list +)
+                                       (clojure.core/list -)
+                                       (clojure.core/list *)))
+swj> '`(~@[+ - *])
+(clojure.core/seq (clojure.core/concat [+ - *]))
+```
+
+So, how do we look up elements in these collections? We can't use `get` or
+`nth`, since they contain alphanumerics. So we can use the fact that sets,
+vectors and maps are functions themselves!
+
+```clojure
+swj> ({+ -} +)
+#<core$->
+swj> (['+ '-] `0) ;; `0 == (+)
+swj> (['+ '-] (+))
++
+swj> (#{+ - *} *)
+#<core$*>
+```
+
+If the element does not exist in the collection, we get back nil, or an error
+for vectors:
+
+```clojure
+swj> ([] +)
+Illegal argument: Key must be integer
+swj> ([] (+))
+Illegal argument: Index out of bounds for vector
+swj> (#{} +)
+nil
+swj> ({} +)
+nil
+```
+
+It's also possible to do lookup with symbols and keywords:
+
+```clojure
+swj> ('+ {'+ (*)})
+1
+swj> (:! #{:!})
+:!
+```
+
+For maps, symbol and keywords, you can also provide a default argument if the
+value does not exists in the collection:
+
+```clojure
+swj> ({} + :-)
+:-
+swj> (:- #{:!} :+)
+:+
+swj> ('++ {:++ :-} :!!)
+:!!
+```
+
+... but we haven't looked at how to lookup elements in a list. How do we do
+that? Since there is no non-alphanumeric function for that, we have to convert
+lists to vectors first:
+
+```clojure
+swj> '(+ - *)
+(+ - *)
+swj> `[~@'(+ - *)]
+[+ - *]
+swj> (`[~@'(+ - *)] `0)
+swj> (`[~@'(+ - *)] (+))
++
+```
+
+We will see some actual usage of this transformation when we come to basic
+functions. However, you will rarely have to use this, as it is more common to
+use vectors for more or less everthing.
 
 ## Conditionals
 
