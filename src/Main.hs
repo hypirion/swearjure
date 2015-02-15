@@ -36,7 +36,7 @@ main = do args <- getArgs
            _ -> banner
 
 banner :: IO ()
-banner = putStrLn "Swearjure, version (+).(*).(+) (aka 0.1.0)"
+banner = putStrLn "Swearjure, version (+).(*).(+)-SNAPSHOT (aka 0.1.0-SNAPSHOT)"
 
 static :: String -> IO ()
 static input = do let wrap = '[' : input ++ "]"

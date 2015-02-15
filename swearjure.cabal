@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                swearjure
-version:             0.1.0
+version:             0.1.0-SNAPSHOT
 synopsis:            Clojure without alphanumerics.
 -- description:         
 homepage:            http://www.swearjure.com
