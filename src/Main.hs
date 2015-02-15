@@ -36,7 +36,7 @@ main = do args <- getArgs
            _ -> banner
 
 banner :: IO ()
-banner = putStrLn $ "Swearjure, version (+).(*).(+) (aka 0.1.0)"
+banner = putStrLn "Swearjure, version (+).(*).(+) (aka 0.1.0)"
 
 static :: String -> IO ()
 static input = do let wrap = '[' : input ++ "]"
@@ -47,7 +47,7 @@ static input = do let wrap = '[' : input ++ "]"
 
 interactive :: IO ()
 interactive = do hist <- readHistory
-                 runStateT (loop 1) hist >> return ()
+                 void $ runStateT (loop 1) hist
 
 loop :: Int -> StateT (Seq String) IO ()
 loop gsymCount

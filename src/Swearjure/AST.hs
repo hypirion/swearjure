@@ -42,7 +42,7 @@ lookupMacro s = ask >>= lookupRec
 lookup :: (MonadReader Env m, MonadError SwjError m) =>
           String -> m Val
 lookup s = ask >>= lookupRec
-  where lookupRec (Toplevel m) = m `findOr` (throwError $ NotFound s)
+  where lookupRec (Toplevel m) = m `findOr` throwError (NotFound s)
         lookupRec (Nested up m) = m `findOr` lookupRec up
         m `findOr` other
           = do let v = M.lookup s m
@@ -73,7 +73,7 @@ getMapping s = if S.member s specials
                               maybe other (namespaced . fst) v
         namespaced ns = return . Just . Fix . ESym (Just ns) $ s
 
-data FnF e = Fn { fnEnv :: (EnvF e)
+data FnF e = Fn { fnEnv :: EnvF e
                 , fnNs :: String
                 , fnName :: String
                 , fnRecName :: Maybe String
@@ -167,7 +167,7 @@ pp' sfn = cata go
         go (EList xs) = parens $ hsep xs
         go (EVec xs) = brackets $ hsep xs
         go (EHM pairs) = braces $ hsep $ concatMap (\(x,y) -> [x, y]) pairs
-        go (ESet s) = char '#' <> (braces $ hsep s)
+        go (ESet s) = char '#' <> braces (hsep s)
         go (EKw ns s) = char ':' <> nsPP ns <> text s
         go (EBool True) = text "true"
         go (EBool False) = text "false"

@@ -43,7 +43,7 @@ cljns = "clojure.core/"
 
 -- | Discards the result of the parser
 omit :: SwjParser p -> SwjParser ()
-omit p = p >> return ()
+omit = void
 
 -- | Semi matches a semicolon and returns
 semi :: SwjParser Char
@@ -94,11 +94,11 @@ keyword = lexeme (char ':' >> (nonQual <|> qual <|> alphaNums))
         qual = Fix . PQualKw <$> (char ':' >> symString)
 
 malString :: SwjParser PVal
-malString = Fix . PString <$> (lexeme $ between (char '"') (char '"')
-                               (many stringChar))
+malString = Fix . PString <$> lexeme (between (char '"') (char '"')
+                                      (many stringChar))
   where stringChar = stringLetter <|> stringEscape
                      <?> "string character (non-alphanumeric)"
-        stringLetter = satisfy (\c -> (c /= '"') && (c /= '\\') && (not $ isAlphaNum c))
+        stringLetter = satisfy (\c -> (c /= '"') && (c /= '\\') && not (isAlphaNum c))
         -- Todo: Fix this properly?
         stringEscape = char '\\' >> oneOf "\\\""
 

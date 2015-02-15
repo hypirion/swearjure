@@ -9,7 +9,7 @@ import           Data.Generics.Fixplate hiding (mapM)
 import qualified Data.Generics.Fixplate as F
 import           Data.List (elemIndex)
 import qualified Data.Map as M
-import           Data.Maybe (maybeToList, fromMaybe)
+import           Data.Maybe (maybeToList, fromMaybe, isJust)
 import           Prelude hiding (seq)
 import           Swearjure.AST
 import           Swearjure.Errors
@@ -19,7 +19,7 @@ readVal :: String -> EvalState (Maybe Val)
 readVal str = readAst str >>= traverse replaceFnLits >>= traverse convertAst
 
 convertAst :: PVal -> EvalState Val
-convertAst ast = go ast
+convertAst = go
   where go :: PVal -> EvalState Val
         go = liftM Fix . goF . unFix
         goF :: PValF PVal -> EvalState (SwjValF Val)
@@ -101,12 +101,12 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
                         return gsym
           | last s == '.' = throwError $ IllegalState "expansion of class ctors not implemented yet"
           | head s == '.' = return $ PList [_pquote, Fix sym]
-          | fst (splitSym s) /= Nothing = return $ PList [_pquote, Fix sym]
+          | isJust $ fst (splitSym s) = return $ PList [_pquote, Fix sym]
           | otherwise = do newSym <- fromMaybe (Fix $ PSym $ "user/" ++ s)
-                                     <$> (liftM (fmap $ Fix . deSym . unFix) $
-                                          getMapping s)
+                                     <$> liftM (fmap $ Fix . deSym . unFix)
+                                         (getMapping s)
                            return $ PList [_pquote, newSym]
-        go lst@(PList []) = return $ lst
+        go lst@(PList []) = return lst
         go (PList xs)
           | head xs == _punquote = return $ unFix $ xs !! 1
           | head xs == _punquoteSplicing
@@ -150,6 +150,6 @@ syntaxUnquote e = fst <$> runStateT (go $ unFix e) M.empty
         _phashset = Fix $ PSym "clojure.core/hash-set"
         _plist = Fix $ PSym "clojure.core/list"
         _pseq =  Fix $ PSym "clojure.core/seq"
-        deSym (ESym a b) = PSym $ (maybe "" (++ "/") a) ++ b
+        deSym (ESym a b) = PSym $ maybe "" (++ "/") a ++ b
         deSym _ = error "getMapping returned non-sym back"
         iPList = Fix . PList

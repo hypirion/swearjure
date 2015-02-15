@@ -6,10 +6,11 @@ import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Data.Function (on)
 import           Data.Generics.Fixplate (Mu(..))
 import           Data.List (nub, sortBy)
 import qualified Data.Map as M
-import           Data.Maybe (fromMaybe, listToMaybe, isJust)
+import           Data.Maybe (fromMaybe, listToMaybe, isJust, isNothing)
 import qualified Data.Set as S
 import qualified Data.Traversable as T
 import           Prelude hiding (lookup, seq, concat)
@@ -95,7 +96,7 @@ macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
   | otherwise = do maybeMacro <- lookupMacro s
                    case maybeMacro of
                     Just macro ->
-                      do expandOnce <- apply [macro, (Fix (EList xs))]
+                      do expandOnce <- apply [macro, Fix (EList xs)]
                          macroexpand expandOnce
                     Nothing -> Fix <$> T.mapM macroexpand (unFix lst)
 macroexpand (Fix x) = Fix <$> T.mapM macroexpand x
@@ -109,7 +110,7 @@ eval = macroexpand >=> go . unFix
           | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
           | head xs == _fnStar = makeLambda $ tail xs
           | otherwise = do f : xs' <- mapM eval xs
-                           apply [f, (Fix (EList xs'))]
+                           apply [f, Fix (EList xs')]
         go v@(EVec _) = Fix <$> T.mapM eval v
         go (ESet xs) = do evals <- mapM eval xs
                           checkDupe evals
@@ -125,7 +126,7 @@ eval = macroexpand >=> go . unFix
 -- | The 'sortWith' function sorts a list of elements using the
 -- user supplied function to project something out of each element
 sortWith :: Ord b => (a -> b) -> [a] -> [a]
-sortWith f = sortBy (\x y -> compare (f x) (f y))
+sortWith f = sortBy (compare `on` f)
 
 makeLambda :: [Val] -> EvalState Val
 makeLambda xs = do env <- ask
@@ -137,7 +138,7 @@ makeLambda xs = do env <- ask
                    validateArity $ map (\(x, y, _) -> (length x, y)) fns
                    -- TODO: Walk the values and verify that symbols and vars can
                    -- be resolved.
-                   return $ Fix $ EFn $
+                   return $ Fix $ EFn
                      Fn { fnEnv = env
                         , fnNs = "user"
                         , fnName = mungedName recName num
@@ -147,18 +148,18 @@ makeLambda xs = do env <- ask
   where mungedName (Just fname) num = "eval" ++ show num ++ "$" ++ fname ++ "__"
                                       ++ show (num + 1)
         mungedName Nothing num = mungedName (Just "fn") num
-        findName ((ESym _ s) : rst)
+        findName (ESym _ s : rst)
           | S.member s specials = throwError $ IllegalArgument
                                   $ "Can't use " ++ s ++ " as function name"
           | otherwise = return (Just s, rst)
         findName r = return (Nothing, r)
         mkUnsureFn :: [SwjValF Val] -> EvalState [([String], Maybe String, [Val])]
         mkUnsureFn [] = return []
-        mkUnsureFn lst@((EList _) : _) = mkFns lst
-        mkUnsureFn lst@((EVec _) : _) = do fn <- mkFn lst
-                                           return [fn]
+        mkUnsureFn lst@(EList _ : _) = mkFns lst
+        mkUnsureFn lst@(EVec _ : _) = do fn <- mkFn lst
+                                         return [fn]
         mkUnsureFn (x : _) = throwError $ CastException (typeName' x) "List/Vector"
-        mkFn ((EVec args') : exprs)
+        mkFn (EVec args' : exprs)
           = do (args, restArg) <- validateArgs $ map unFix args'
                return (args, restArg, map Fix exprs)
         mkFn (x : _) = throwError $ CastException (typeName' x) "Vector"
@@ -171,13 +172,13 @@ makeLambda xs = do env <- ask
         validateArgs (s@(ESym (Just _) _) : _)
           = throwError $ IllegalArgument $
             "Can't use qualified name as parameter: " ++ prStr (Fix s)
-        validateArgs [(ESym Nothing "&"), s@(ESym (Just _) _)]
+        validateArgs [ESym Nothing "&", s@(ESym (Just _) _)]
           = throwError $ IllegalArgument $
             "Can't use qualified name as parameter: " ++ prStr (Fix s)
-        validateArgs [(ESym Nothing "&"), (ESym Nothing s)]
+        validateArgs [ESym Nothing "&", ESym Nothing s]
           | s /= "&" = return ([], Just s)
           | otherwise = throwError $ IllegalArgument "Invalid parameter list"
-        validateArgs ((ESym Nothing s) : args')
+        validateArgs (ESym Nothing s : args')
           | s /= "&" = do (args, restArg) <- validateArgs args'
                           return (s : args, restArg)
           | otherwise = throwError $ IllegalArgument "Invalid parameter list"
@@ -191,7 +192,7 @@ makeLambda xs = do env <- ask
                when (ys /= nub ys) $ throwError $ IllegalArgument
                  "Can't have 2 overloads with same arity"
                when (variadicCount ys == 1 &&
-                     snd (last ys) == Nothing) $
+                     isNothing (snd $ last ys)) $
                  throwError $ IllegalArgument $ "Can't have fixed arity "
                  ++ "function with more params than variadic function"
         variadicCount ys = length (filter isJust (map snd ys))
@@ -216,7 +217,7 @@ ifn = go . unFix
         unnamedPrim = return . PrimFn . Prim ("", "")
 
 checkDupe :: [Val] -> EvalState ()
-checkDupe xs = go S.empty xs
+checkDupe = go S.empty
   where go _ [] = return ()
         go s (x : r)
           | S.member x s = throwError $ IllegalState
