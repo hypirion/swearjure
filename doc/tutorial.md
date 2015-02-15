@@ -315,7 +315,7 @@ definition of factorial is defined like this, then it would never terminate!
 
 The solution to expressions containing non-terminating computations is, of
 course to defer the computation until it's actually needed. But how do we do
-that without if? To see how we can do that, let's have a look at the following
+that without `if`? To see how we can do that, let's have a look at the following
 Clojure expression:
 
 ```clojure
@@ -336,7 +336,7 @@ Let's go back to our original problem, and see if we can apply this there:
   (* n (! (- n 1))))
 ```
 
-The idea is to return a function inside the if, which we then immediately
+The idea is to return a function inside the `if`, which we then immediately
 call. This means that both functions must take the same amount of arguments. In
 normal Clojure, we could do that rewrite like this:
 
@@ -381,6 +381,93 @@ Being able to do these transformations is the core essence of Swearjure, and it
 is not always as easy as in this example.
 
 ## Basic Functions
+
+The only way to create functions is by using the function literal `#()`. Let's
+play around with this:
+
+```clojure
+swj> #()
+#<user$eval1$fn__2>
+swj> (#(+ % %) (*))
+2
+swj> (#(* % % %) `2)
+swj> (#(* % % %) (+ (*) (*)))
+8
+swj> (#(%) `1)
+swj> (#(%) (*))
+Cast exception: Integer cannot be cast to IFn
+swj> (#(%&) (*))
+Cast exception: PersistentList cannot be cast to IFn
+swj> (#(+ % (#(+ % %) %)) (*))
+(line 1, column 11):
+Nested #() are not allowed
+```
+
+We only have two literals available: We can use `%`, `%&`, or both. Of course,
+we can't use `%1`, `%2`, `%3` and so forth, as they contain digits. However,
+with proper use of `%&`, we can simulate them: Recall from the section about
+collections that we can convert a list to a vector, and that we can lookup
+elements in that vector:
+
+```clojure
+#(+ %1 %2) == #(+ % (`[~@%&] `0))
+
+#(+ %1 %2 %3) == #(+ % (`[~@%&] `0) (`[~@%&] `1))
+```
+
+It looks pretty ugly, but is fully doable.
+
+With that said, let us attempt to define some core functions in Swearjure
+(`def`ing them to ease readability):
+
+```clojure
+(def swj-inc #(+ % `1))
+
+(def swj-dec #(- % `1))
+
+(def swj-identity #({} % %))
+```
+
+`identity` works, because whatever we get in, it will not be contained in an
+empty map. Therefore the default value (`%`) will be returned.
+
+```clojure
+(def swj-list
+   #([%&] `0))
+;; Here we stick all the arguments in a vector, and immediately drag it out.
+
+(def swj-vector
+  #(`[[~@&%]] `0))
+;; Combining swj-list and the lookup trick to convert the `%&` list to a vector.
+
+(def swj-nth
+  #(`[~@%] (`[~@%&] `0)))
+;; Convert first argument to a vector, then call that vector with the second
+;; argument.
+
+(def swj-hash-map
+  #(`[{~@%& ~@()}] `0))
+```
+
+The hash-map implementation is mighty weird. To have a better look at how it
+works, let's quote it:
+
+```clojure
+swj> '`{~@%& ~@()}
+(clojure.core/apply clojure.core/hash-map
+  (clojure.core/seq (clojure.core/concat %& ())))
+```
+
+This makes sense, but is there any reason why we need the `~@()` there? Yes, if
+we avoid it, we get an error saying "Map literal must contain an even number of
+forms" in Clojure. In Swearjure, the parser just doesn't know what to do when
+there aren't a pair of elements, and just breaks down:
+
+```clojure
+swj> {:+}
+(line 1, column 4):
+unexpected "}"
+```
 
 ### Gensyms
 
