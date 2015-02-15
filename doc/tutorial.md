@@ -242,8 +242,8 @@ swj> '(+ - *)
 (+ - *)
 swj> `[~@'(+ - *)]
 [+ - *]
-swj> (`[~@'(+ - *)] `0)
-swj> (`[~@'(+ - *)] (+))
+swj> (`[~@'(+ - *)] `1)
+swj> (`[~@'(+ - *)] (*))
 +
 ```
 
@@ -252,6 +252,133 @@ functions. However, you will rarely have to use this, as it is more common to
 use vectors for more or less everthing.
 
 ## Conditionals
+
+Conditionals are hard to do, for obvious reasons: We can't use `if`, which is
+the basic primitive for running code conditionally. So we're in a bad spot: How
+can we ensure that we only take one branch out of two?
+
+Before we go into that problem, let us assume that taking both branches is
+alright (that is, they will both terminate and neither will crash). If we, for
+instance, have the Clojure expression
+
+```clojure
+(if conditional
+  then
+  else)
+```
+
+If we assume the expressions are legal in Swearjure, we only need to remove the
+if. This not that difficult, when we remember that maps are functions. We can
+then associate falsey values with the else expression, and the default value is
+the then expression:
+
+```clojure
+({nil else
+  false else} conditional
+  then)
+```
+
+This is a bit clumsy though. Fortunately, most conditionals in Swearjure are
+expressed by equal like this: `(= expected actual)`. In that case, the
+expression
+
+```clojure
+(if (= expected actual)
+  then
+  else)
+```
+
+can be converted to the following:
+
+```clojure
+({expected then} actual else)
+```
+
+As an example, consider this inner part of a factorial function:
+
+```clojure
+(if (= n 0)
+  1
+  (* n (! (- n 1))))
+```
+
+This could be expressed as
+
+```clojure
+({n 1} 0 (* n (! (- n 1))))
+```
+
+*assuming* `(! (- n 1))` terminates. Of course, it's not that easy: If the inner
+definition of factorial is defined like this, then it would never terminate!
+
+### Non-Terminating Conditionals
+
+The solution to expressions containing non-terminating computations is, of
+course to defer the computation until it's actually needed. But how do we do
+that without if? To see how we can do that, let's have a look at the following
+Clojure expression:
+
+```clojure
+((if (= a b) + -)
+ 1 2)
+```
+
+In this expression, we get back 3 if a equals b, otherwise we get back -1.
+However, and this is the important part: *The if statement returns a function*
+*we then call*. Since we don't actually call both functions (only the one we
+need), we sort-of have something that act as an if statement.
+
+Let's go back to our original problem, and see if we can apply this there:
+
+```clojure
+(if (= n 0)
+  1
+  (* n (! (- n 1))))
+```
+
+The idea is to return a function inside the if, which we then immediately
+call. This means that both functions must take the same amount of arguments. In
+normal Clojure, we could do that rewrite like this:
+
+```clojure
+((if (= n 0) 
+   (fn [x] 1)
+   (fn [x] (* x (! (- x 1)))))
+ n)
+```
+
+If you squint closely, you see that they are, in fact, the same. Understanding
+this concept is important to be able to create good idiomatic Swearjure, so play
+around with this idea in normal Clojure until you grasp it.
+
+If we wanted to convert this particular part to Swearjure, we could do it like
+this (assuming we have function literals available at hand):
+
+```clojure
+((if (= n 0)
+   (fn [x] 1) ;; convert to {n 1} -- which always return 1
+   (fn [x] (* x (! (- x 1))))) ;; convert to function literal
+ n)
+
+((if (= n 0) ;; change if by the rules above
+   {n 1}
+   #(* % (! (- % 1))))
+ n)
+
+(({n {n 1}} 0
+   #(* % (! (- % 1))))
+ n)
+
+;; (Now change the n variable name to $ (something non-alphanumeric),
+;;  and replace zeroes and ones)
+
+(({$ {$ (*)}} (+)
+   #(* % (! (- % (*)))))
+ $)
+```
+
+Being able to do these transformations is the core essence of Swearjure, and it
+is not always as easy as in this example.
 
 ## Basic Functions
 
