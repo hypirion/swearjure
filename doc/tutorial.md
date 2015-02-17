@@ -471,6 +471,22 @@ unexpected "}"
 
 ### Gensyms
 
+In Swearjure, you can generate gensyms through some "undocumented features" in
+the function literal expansion code:
+
+```clojure
+swj> (#(['%](+)) +)
+p1__37#
+swj> (#([`%](+)) +)
+p1__38__39__auto__
+```
+
+The function will always return the same gensym though, so it can't be used for
+gensym creation. However, this trick can be used to generate a unique value you
+can compare against (as long as you don't leak it outside). This can be handy if
+you e.g. want to implement `last`/`count` on a vector/list, but don't want to
+hit the out of bounds exception.
+
 ### Injecting Return Values
 
 ### Injecting Recursive Names/Parameters
