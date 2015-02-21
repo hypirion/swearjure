@@ -26,6 +26,8 @@ executable swearjure
                      , mtl >= 2.2
                      , parsec >= 3.1
                      , pretty >= 1.1
+                     , random >= 1.1
+                     , random-shuffle >= 0.0.4
                      , readline >= 1.0.3.0
                      , system-fileio >= 0.3
                      , system-filepath >= 0.4

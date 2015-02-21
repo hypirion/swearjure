@@ -5,8 +5,8 @@ module Swearjure.Reader where
 import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.Except
 import           Control.Monad.State
-import           Data.Generics.Fixplate hiding (mapM)
 import qualified Data.Generics.Fixplate as F
+import           Data.Generics.Fixplate hiding (mapM)
 import           Data.List (elemIndex)
 import qualified Data.Map as M
 import           Data.Maybe (maybeToList, fromMaybe, isJust)
@@ -14,6 +14,8 @@ import           Prelude hiding (seq)
 import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Parser
+import           System.Random (newStdGen)
+import           System.Random.Shuffle (shuffle')
 
 readVal :: String -> EvalState (Maybe Val)
 readVal str = readAst str >>= traverse replaceFnLits >>= traverse convertAst
@@ -36,10 +38,15 @@ convertAst = go
                          ++ "literals should've been eradicated by now"
         goF (PList xs) = EList <$> mapM go xs
         goF (PVec xs) = EVec <$> mapM go xs
-        goF (PSet xs) = ESet <$> mapM go xs
+        -- randomization of sets and hash maps
+        goF (PSet xs) = do vals <- mapM go xs
+                           ESet <$> shuffle vals
         -- want this to be Data.Set, but forces eq + ord on Mu/Attr
-        goF (PHM pairs) = EHM <$> mapM (\(x, y) -> (,) <$> go x <*> go y) pairs
+        goF (PHM pairs) = do vals <- mapM (\(x, y) -> (,) <$> go x <*> go y) pairs
+                             EHM <$> shuffle vals
         goF (PSyntaxQuote x) = syntaxUnquote x >>= goF
+        shuffle xs = do rand <- liftIO newStdGen
+                        return $ shuffle' xs (length xs) rand
 
 splitSym :: String -> (Maybe String, String)
 splitSym "/" = (Nothing, "/")
