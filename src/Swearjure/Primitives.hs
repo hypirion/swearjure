@@ -117,13 +117,13 @@ eq (x : y : r) = if x == y
 -- hash-map and hash-set
 
 hashMap :: [Val] -> EvalState Val
-hashMap xs = Fix . EHM . M.toList <$> go M.empty xs
+hashMap xs = Fix . EHM  <$> (go M.empty xs >>= shuffle . M.toList)
   where go m [] = return m
         go _ [k] = throwError $ IllegalArgument $ "No value supplied for key: " ++ prStr k
         go m (k : v : kvs) = go (M.insert k v m) kvs
 
 hashSet :: [Val] -> EvalState Val
-hashSet xs = Fix . ESet . S.toList <$> go S.empty xs
+hashSet xs = Fix . ESet <$> (go S.empty xs >>= shuffle . S.toList)
   where go s [] = return s
         go s (v : vs) = go (S.insert v s) vs
 

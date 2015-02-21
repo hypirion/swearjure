@@ -12,8 +12,14 @@ import qualified Data.Map as M
 import           Data.Ratio
 import qualified Data.Set as S
 import           Swearjure.Errors
+import           System.Random (newStdGen)
+import           System.Random.Shuffle (shuffle')
 import           Text.PrettyPrint
 
+
+shuffle :: [a] -> EvalState [a]
+shuffle xs = do rand <- liftIO newStdGen
+                return $ shuffle' xs (length xs) rand
 
 type EvalState = ReaderT Env (StateT Int (ExceptT SwjError IO))
 

@@ -14,8 +14,6 @@ import           Prelude hiding (seq)
 import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Parser
-import           System.Random (newStdGen)
-import           System.Random.Shuffle (shuffle')
 
 readVal :: String -> EvalState (Maybe Val)
 readVal str = readAst str >>= traverse replaceFnLits >>= traverse convertAst
@@ -45,8 +43,6 @@ convertAst = go
         goF (PHM pairs) = do vals <- mapM (\(x, y) -> (,) <$> go x <*> go y) pairs
                              EHM <$> shuffle vals
         goF (PSyntaxQuote x) = syntaxUnquote x >>= goF
-        shuffle xs = do rand <- liftIO newStdGen
-                        return $ shuffle' xs (length xs) rand
 
 splitSym :: String -> (Maybe String, String)
 splitSym "/" = (Nothing, "/")
