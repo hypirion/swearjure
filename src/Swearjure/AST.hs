@@ -18,6 +18,7 @@ import           Text.PrettyPrint
 
 
 shuffle :: [a] -> EvalState [a]
+shuffle [] = return []
 shuffle xs = do rand <- liftIO newStdGen
                 return $ shuffle' xs (length xs) rand
 
