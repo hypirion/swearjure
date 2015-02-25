@@ -70,7 +70,8 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
            , fnFns = options} args
   = do (paramNames, restName, exprs) <- findOption (length args) options
        mapping <- prepMapping paramNames restName args $ recBinding fname
-       extendEnv env mapping (evalAll exprs)
+       thunk <- extendEnv env mapping (evalAll exprs)
+       thunk
     where findOption n [] = throwError $ ArityException n (prStr $ Fix $ EFn f)
           findOption n (opt : rst)
             | argcPred opt n = return opt
@@ -84,10 +85,13 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
           prepMapping [] Nothing [] acc = return acc
           prepMapping _ _ _ _ = throwError $ IllegalState $ "Well, we still have"
                               ++ " some arguments left, but no values to assign"
-          evalAll exprs = last <$> mapM eval exprs
+          -- Returns a thunk, in order to support tail recursion
+          evalAll [x@(Fix (EList []))] = return $ return x
+          evalAll [Fix (EList xs)] = do evf : evxs <- mapM eval xs
+                                        return $ apply [evf, Fix (EList evxs)]
+          evalAll (x : xs) = eval x >> evalAll xs
+          evalAll [] = return $ return _nil
 runFn (PrimFn (Prim _ prim)) args = prim args
-
--- For later: do some tail recursion tricks.
 
 macroexpand :: Val -> EvalState Val
 macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
