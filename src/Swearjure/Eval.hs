@@ -89,6 +89,7 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
           evalAll [x@(Fix (EList []))] = return $ return x
           evalAll [Fix (EList xs)] = do evf : evxs <- mapM eval xs
                                         return $ apply [evf, Fix (EList evxs)]
+          evalAll [x] = return $ return x
           evalAll (x : xs) = eval x >> evalAll xs
           evalAll [] = return $ return _nil
 runFn (PrimFn (Prim _ prim)) args = prim args
