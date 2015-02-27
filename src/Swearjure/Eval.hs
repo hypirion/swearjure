@@ -87,8 +87,16 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
                               ++ " some arguments left, but no values to assign"
           -- Returns a thunk, in order to support tail recursion
           evalAll [x@(Fix (EList []))] = return $ return x
-          evalAll [Fix (EList xs)] = do evf : evxs <- mapM eval xs
-                                        return $ apply [evf, Fix (EList evxs)]
+          evalAll [Fix (EList xs)]
+            | head xs == _quote = return $ return $ fromMaybe _nil (listToMaybe $ tail xs)
+            | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
+          -- need to trick the thunkification here: We must run this in the
+          -- parent environment, so let's just grab it and rewrap the result.
+            | head xs == _fnStar = do env' <- ask
+                                      return $ local (const env')
+                                        (makeLambda $ tail xs)
+            | otherwise = do evf : evxs <- mapM eval xs
+                             return $ apply [evf, Fix (EList evxs)]
           evalAll [x] = return $ return x
           evalAll (x : xs) = eval x >> evalAll xs
           evalAll [] = return $ return _nil
