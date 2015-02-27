@@ -471,7 +471,76 @@ unexpected "}"
 
 ### Injecting Return Values
 
+We can inject return values by using `->>` in Swearjure. They work like this:
+
+```clojure
+swj> (->> :+ #())
+#<user$eval1$fn__2>
+swj> ((->> :+ #()))
+:+
+```
+
+Why does this work? It works because `#()` is expanded *before* the
+macroexpansion – so in fact, the last expansion works like this:
+
+```clojure
+(->> :+ (fn* [] ()))
+=> (fn* [] () :+)
+```
+
+Remember the nested functions problem? We can now circumvent that problem:
+
+```clojure
+swj> #(#())
+(line 1, column 5):
+Nested #() are not allowed
+swj> ;; line below turns into (fn* [] () (fn* [] ()))
+swj> (->> #() #())
+#<user$eval13$fn__14>
+swj> ((->> #() #()))
+#<user$eval17$fn__18>
+swj> (((->> #() #())))
+()
+```
+
+However, we can't refer to values from the outer function in the inner function
+(at least not yet). So, although we've found a way to insert functions into
+other functions, we can't utilise closures just yet.
+
 ### Injecting Recursive Names/Parameters
+
+We just saw how we can inject return values by using `->>`. What happens if we
+use `->`? Well, it depends on what we put into the function. If we put a symbol,
+we can refer to the function inside itself:
+
+```clojure
+swj> ;; line below turns into (fn* $ [] ([$](+)))
+swj> ;; which is the same as  (fn* $ [] $)
+swj> (-> $ #([$](+)))
+#<user$eval23$$__24>
+swj> ((-> $ #([$](+))))
+#<user$eval25$$__26>
+swj> ((((((((-> $ #([$](+))))))))))
+#<user$eval27$$__28>
+```
+
+If we put a vector with symbols in it, we suddenly have a new arglist! Although
+this doesn't seem to give us new powers, it's much more convenient when we want
+to handle multiple args:
+
+```clojure
+swj> (-> [$ !] #(+ $ !))
+#<user$eval29$$__30>
+swj> ((-> [$ !] #(+ $ !)) (*) (+ (*) (*)))
+3
+swj> ;; We even have rest args by using &!
+swj> ;; Line below is equivalent to (fn* [$ & !] [! $])
+swj> ((-> [$ & !] #([[! $]] (+))) :+ :- :* :!)
+[(:- :* :!) :+]
+swj> ((-> [? ! $ _] #(* (+ ? !) (+ $ _))) `1 `2 `2 `2)
+swj> ((-> [? ! $ _] #(* (+ ? !) (+ $ _))) (*) (+ (*) (*)) (+ (*) (*)) (+ (*) (*)))
+12
+```
 
 ## More Complex Functions
 
