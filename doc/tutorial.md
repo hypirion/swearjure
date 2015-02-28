@@ -544,4 +544,77 @@ swj> ((-> [? ! $ _] #(* (+ ? !) (+ $ _))) (*) (+ (*) (*)) (+ (*) (*)) (+ (*) (*)
 
 ## More Complex Functions
 
+Could we make more complex functions? Sure thing, we can combine `->` and `->>`!
+It is a bit hard to derive how we can compose it though, because they both
+affect each other. I'll just give you the formula which you can copypaste:
+
+```clojure
+(->> last-form #() (-> [bindings]))
+;; is identical to
+(fn* [bindings] [] () last-form)
+```
+
+Bindings can also be the name of your anonymous function.
+
+One of the cool things about this is that tt's pretty straightforward to use,
+and you can compose them together! Here are some examples to get you starting:
+
+```clojure
+(->> (+ a b) #() (-> [a b]))
+;; is equal to
+(fn [a b] (+ a b))
+
+(->> $ #() (-> [_ $]))
+;; is equal to
+(fn [_ $] $)
+
+(->> (->> outer
+      #() (-> [inner]))
+ #() (-> [outer]))
+;; is equal to
+(fn [outer] (fn [inner] outer))
+```
+
+Now, those are relatively easy to read, but you can do way more complex things.
+Here, for example, we define the Y combinator and factorial in a
+Swearjure-friendly way:
+
+```clojure
+(def Y (-> (->> (#(% %) (->> (! (->> (($ $)?)
+                                  #() (->[?])))
+                          #() (->[$]))))
+           (->> #() (->[!]))))
+
+(def fac (->> (->> (({(= (+) $) #(*)}
+                     (= =)
+                     #(* $ (! (- $ (*))))))
+               #() (-> [$]))
+          #() (-> [!])))
+
+((Y fac) 10) #_=> 10
+```
+
+Perhaps you've noted down the pattern for functions inside functions already:
+They all start out on the form `(->> (->> (->>` and end with something like
+
+```clojure
+    #() (-> [!]))
+  #() (-> [?]))
+#() (-> [$]))
+```
+
+I have found this pattern helpful in order to make somewhat sense of Swearjure
+code: Every `#() (-> [binding])` is the same as a `(fn [binding]`, but in
+"reverse". In the example above, the outermost function has the binding form
+`[$]`, whereas the innermost function has the binding form `[!]`. Based on that,
+we can safely assume, if the form starts with `(->> (->> (->>`, that it looks
+like this:
+
+```clojure
+(fn [$]
+  (fn [?]
+    (fn [!]
+      ...)))
+```
+
 ## I/O
