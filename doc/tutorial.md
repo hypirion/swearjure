@@ -618,3 +618,38 @@ like this:
 ```
 
 ## I/O
+
+There's a big problem with Swearjure: We can't do any I/O whatsoever!
+Fortunately, we have our own implementation and can bend the rules a little:
+
+`>>'` reads a single character and returns its character code as an int, while
+`<<'` prints an int as the character it represents:
+
+```clojure
+swj> ;; first line is user input, second line is output
+swj> (<<')
+f
+102
+swj> ;; next character read is the newline we produced
+swj> (<<')
+10
+swj> [(>>' (<<')) (>>' (<<')) (<<')]
+ab
+ab[nil nil 10]
+swj> ;; next line is cat in Swearjure
+swj> ((->> (>=>) #(>>' (<<')) (-> >=>)))
+foo
+foo
+bar
+bar
+baz
+baz
+...
+```
+
+In theory, we can implement a crippled variant of `prn` and `read` with `>>'`
+and `<<'`!
+
+To avoid redoing that work all the time, Swearjure also ships with the functions
+`>>` and `<<`. `>>` works the same as the output from a Swearjure repl, whereas
+`<<` is a bit "cheaty", and is more or less equivalent to `read`.
