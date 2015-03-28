@@ -341,7 +341,7 @@ call. This means that both functions must take the same amount of arguments. In
 normal Clojure, we could do that rewrite like this:
 
 ```clojure
-((if (= n 0) 
+((if (= n 0)
    (fn [x] 1)
    (fn [x] (* x (! (- x 1)))))
  n)
@@ -653,3 +653,32 @@ and `<<'`!
 To avoid redoing that work all the time, Swearjure also ships with the functions
 `>>` and `<<`. `>>` works the same as the output from a Swearjure repl, whereas
 `<<` is a bit "cheaty", and is more or less equivalent to `read`.
+
+### Compatibility with Other Clojure Versions
+
+The functions provided above are somewhat problematic if you want to write
+portable code. `>>` and friends are not defined in Clojure or ClojureScript, so
+code depending on those will not be runnable on those hosts unless we do some
+tricks.
+
+Fortunately, version 1.7.0 of Clojure adds the Reader Conditional functionality,
+so we can use that as a prelude to our code. Here we define the functions for
+Clojure itself:
+
+```clj
+#@?(:?!$ []
+    :clj [(def >> prn)
+          (def << read)
+          (defn >>' [& vals]
+            (doseq [val vals]
+              (.print System/out (char val))))
+          (defn <<' []
+            (.read System/in))])
+```
+
+`:?!$` is the platform name for Swearjure, whereas `:clj` represents Clojure
+proper.
+
+Note that `<<'` may cause hiccups within `lein repl`, so prefer to run it in a
+non-repl environment when possible. The Swearjure repl handles all cases
+gracefully.
