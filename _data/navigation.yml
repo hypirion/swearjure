@@ -1,7 +1,10 @@
 # Menu navigation links
 
+- title: Source Code
+  url: https://github.com/hyPiRion/swearjure
+
 - title: Theme Setup
   url: /theme-setup/
 
-- title: External Link
-  url: http://mademistakes.com
+- title: Polymatheia
+  url: http://hypirion.com
