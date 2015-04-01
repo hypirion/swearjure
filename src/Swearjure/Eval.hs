@@ -89,6 +89,7 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
           evalAll [x@(Fix (EList []))] = return $ return x
           evalAll [Fix (EList xs)]
             | head xs == _quote = return $ return $ fromMaybe _nil (listToMaybe $ tail xs)
+            | head xs == _var = return $ var (tail xs)
             | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
           -- need to trick the thunkification here: We must run this in the
           -- parent environment, so let's just grab it and rewrap the result.
@@ -103,10 +104,11 @@ runFn f@Fn {fnEnv = env, fnRecName = fname
 runFn (PrimFn (Prim _ prim)) args = prim args
 
 macroexpand :: Val -> EvalState Val
-macroexpand lst@(Fix (EList (x@(Fix (ESym _ s)) : xs)))
+macroexpand lst@(Fix (EList (x@(Fix (ESym ns s)) : xs)))
   | x == _quote = return lst
   | x == _fnStar = return lst
-  | otherwise = do maybeMacro <- lookupMacro s
+  | x == _var = return lst
+  | otherwise = do maybeMacro <- lookupMacro ns s
                    case maybeMacro of
                     Just macro ->
                       do expandOnce <- apply [macro, Fix (EList xs)]
@@ -116,10 +118,11 @@ macroexpand (Fix x) = Fix <$> T.mapM macroexpand x
 
 eval :: Val -> EvalState Val
 eval = macroexpand >=> go . unFix
-  where go (ESym _ s) = lookup s
+  where go (ESym ns s) = lookup ns s
         go x@(EList []) = return $ Fix x
         go (EList xs)
           | head xs == _quote = return $ fromMaybe _nil (listToMaybe $ tail xs)
+          | head xs == _var = var (tail xs)
           | head xs == _nil = throwError $ IllegalArgument "Can't call nil"
           | head xs == _fnStar = makeLambda $ tail xs
           | otherwise = do f : xs' <- mapM eval xs
@@ -221,6 +224,10 @@ ifn = go . unFix
         go v@(EVec _) = lookup1 v
         go s@(ESet _) = lookup1 s
         go hm@(EHM _) = lookup12 hm
+        go (EVar f True) = unnamedPrim -- this always throws arity exceptions
+                           (\x -> throwError $ ArityException (length x)
+                                  (prStr $ Fix $ EFn f)) -- TODO: Not printed correctly.
+        go (EVar fn False) = return fn
         go x = throwError $ CastException (typeName' x) "IFn"
         lookupThing s = unnamedPrim
                         (\xs -> let (f, r) = splitAt 1 xs in
@@ -236,3 +243,18 @@ checkDupe = go S.empty
           | S.member x s = throwError $ IllegalState
                            $ "Duplicate entry: " ++ prStr x
           | otherwise = go (S.insert x s) r
+
+var :: [Val] -> EvalState Val
+var (Fix (ESym ns v) : _)
+  = do macroLookup <- lookupMacro ns v
+       case macroLookup of
+        (Just (Fix (EFn mac))) -> return $ Fix (EVar mac True)
+        (Just _) -> throwError $ IllegalState $ "Internal Swearjure error --" ++
+                    " macro lookup returned non-macro function"
+        Nothing -> do valLookup <- lookup ns v
+                      case valLookup of
+                       (Fix (EFn fn)) -> return $ Fix (EVar fn False)
+                       _ -> throwError $ IllegalState $ "Swearjure can't take var of non-fn value"
+var (v : _) = throwError $ CastException (typeName v) "Symbol"
+var [] = throwError $ IllegalArgument
+         "(This gives a NullPointerException in Clojure)"

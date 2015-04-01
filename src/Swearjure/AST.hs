@@ -32,33 +32,39 @@ data EnvF e = Toplevel (M.Map String (NS, (Bool, e)))
 
 type Env = EnvF Val
 
+eqNs :: Maybe String -> String -> Bool
+eqNs (Just x) y = x == y
+eqNs Nothing _ = True
+
 -- lookup and lookupMacro would've been namespaced if this was proper clojure,
 -- but you can't refer to same-named values in different namespaces in
 -- Swearjure, so it doesn't matter.
-lookupMacro :: (MonadReader Env m) => String -> m (Maybe Val)
-lookupMacro s = ask >>= lookupRec
+lookupMacro :: (MonadReader Env m) => (Maybe String) -> String -> m (Maybe Val)
+lookupMacro ns s = ask >>= lookupRec
   where lookupRec (Toplevel m) = m `findOr` return Nothing
         lookupRec (Nested up m) = m `findOr` lookupRec up
         m `findOr` other
           = do let v = M.lookup s m
                case v of
                 Just (_, (False, _)) -> return Nothing
-                Just (_, (True, macro)) -> return (Just macro)
+                Just (ns', (True, macro)) | eqNs ns ns' -> return (Just macro)
+                Just (_, (True, _)) -> other
                 Nothing -> other
 
 lookup :: (MonadReader Env m, MonadError SwjError m) =>
-          String -> m Val
-lookup s = ask >>= lookupRec
+          (Maybe String) -> String -> m Val
+lookup ns s = ask >>= lookupRec
   where lookupRec (Toplevel m) = m `findOr` throwError (NotFound s)
         lookupRec (Nested up m) = m `findOr` lookupRec up
         m `findOr` other
           = do let v = M.lookup s m
                case v of
-                Just (_, (False, val)) -> return val
-                Just (ns, (True, _)) -> throwError $ IllegalArgument $
-                                        "Can't take value of macro: #'" ++ ns
-                                        ++ "/" ++ s
-                Nothing -> other
+                Just (ns', (False, val)) | eqNs ns ns' -> return val
+                Just (ns', (True, _))
+                  | eqNs ns ns' -> throwError $ IllegalArgument $
+                                   "Can't take value of macro: #'" ++ ns'
+                                   ++ "/" ++ s
+                _ -> other
 
 extendEnv :: (MonadReader Env m) => Env -> [(String, Val)] -> m a -> m a
 extendEnv oldEnv mappingList = local extend
@@ -115,6 +121,7 @@ data SwjValF e = ESym (Maybe String) String
                | EKw (Maybe String) String
                | EBool Bool
                | EFn (FnF e)
+               | EVar (FnF e) Bool
                | Nil
                deriving (Eq, Ord, Show, Functor, Foldable, Traversable)
 
@@ -132,6 +139,7 @@ typeName' (ESet _) = "PersistentSet"
 typeName' (EKw _ _) = "Keyword"
 typeName' (EBool _) = "Boolean"
 typeName' (EFn _) = "Fn"
+typeName' (EVar _ _) = "Var"
 typeName' Nil = "nil"
 
 typeName :: Val -> String
@@ -182,6 +190,10 @@ pp' sfn = cata go
           = text "#<" <> text ns <> char '$' <> text fname <> char '>'
         go (EFn (PrimFn (Prim (ns, fname) _)))
           = text "#<" <> text ns <> char '$' <> text fname <> char '>'
+        go (EVar (Fn { fnNs = ns, fnName = fname}) _)
+          = text "#'" <> text ns <> char '/' <> text fname
+        go (EVar (PrimFn (Prim (ns, fname) _)) _)
+          = text "#'" <> text ns <> char '/' <> text fname
         go Nil = text "nil"
         nsPP (Just ns) = text ns <> char '/'
         nsPP Nothing = empty
@@ -221,3 +233,6 @@ _nil = Fix Nil
 
 _fnStar :: Val
 _fnStar = Fix $ ESym Nothing "fn*"
+
+_var :: Val
+_var = Fix $ ESym Nothing "var"

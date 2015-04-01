@@ -169,7 +169,9 @@ sharp :: Parser PVal
 sharp = char '#' >> (sharpQuote <|> set <|> fnLit False <|> unreadable)
 
 sharpQuote :: Parser PVal
-sharpQuote = sugared '\'' "var"
+sharpQuote =  do omit (char '\'')
+                 e <- expr
+                 return $ call "var" [e]
 
 -- must propagate the Bool over the affected results
 fnLit :: Bool -> Parser PVal
