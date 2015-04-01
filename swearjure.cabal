@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                swearjure
-version:             0.1.0-SNAPSHOT
+version:             1.0.0
 synopsis:            Clojure without alphanumerics.
 -- description:         
 homepage:            http://www.swearjure.com
@@ -18,7 +18,12 @@ cabal-version:       >=1.10
 
 executable swearjure
   main-is:             Main.hs
-  -- other-modules:       
+  other-modules:       Swearjure.AST
+                       Swearjure.Errors
+                       Swearjure.Eval
+                       Swearjure.Parser
+                       Swearjure.Primitives
+                       Swearjure.Reader
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8
                      , attoparsec >= 0.12

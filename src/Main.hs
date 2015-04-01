@@ -36,7 +36,7 @@ main = do args <- getArgs
            _ -> banner
 
 banner :: IO ()
-banner = putStrLn "Swearjure, version (+).(*).(+)-SNAPSHOT (aka 0.1.0-SNAPSHOT)"
+banner = putStrLn "Swearjure, version (*).(+).(+) (aka 1.0.0)"
 
 -- Since attoparsec
 static :: String -> IO ()
