@@ -111,7 +111,7 @@ readHistory = do hdir <- getAppDataDirectory "swearjure"
                  let file = hdir </> fromText "history"
                  isF <- isFile file
                  if isF
-                    then do ls <- lines <$> readFile (encodeString file)
+                    then do ls <- lines0 <$> readFile (encodeString file)
                             mapM_ addHistory ls
                             return $ fromList ls
                     else return S.empty
@@ -121,9 +121,23 @@ writeHistory hist = do hdir <- getAppDataDirectory "swearjure"
                        createTree hdir
                        let fname = encodeString (hdir </> fromText "history")
                        let hist' = takeLast 1000 hist
-                       writeFile fname (unlines $ toList hist')
+                       writeFile fname (unlines0 $ toList hist')
 
 -- | returns the last n elements in the seq as a seq, or the seq itself if it
 -- contains less than n elements.
 takeLast :: Int -> Seq a -> Seq a
 takeLast n s = S.drop (S.length s - n) s
+
+-- | like unlines, but separates with a null character. Removes the last line.
+unlines0 :: [String] -> String
+unlines0 = init . concatMap (++ "\0")
+
+-- | line lines, but splits at null characters instead
+lines0 :: String -> [String]
+lines0 "" = []
+lines0 s = cons (case break (== '\0') s of
+                  (l, s') -> (l, case s' of
+                                  []      -> []
+                                  _:s''   -> lines0 s''))
+  where
+    cons ~(h, t) =  h : t
