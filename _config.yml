@@ -11,7 +11,7 @@ url:
 owner:
   name:           Swearjure
   avatar:         avatar.png
-  bio:            "Swearjure is a turing complete subset of Clojure that only contains non-alphanumerics."
+  bio:            "Swearjure is a turing complete subset of Clojure that only uses non-alphanumerics."
   email:          
   # Social networking links used in footer. Update and remove as you like.
   twitter:        hyPiRion

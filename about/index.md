@@ -1,34 +1,55 @@
 ---
 layout: page
-title: About the Jekyll Theme
+title: About Swearjure
 image:
-  feature: abstract-5.jpg
+  feature: abstract-8.jpg
   credit: dargadgetz
   creditlink: http://www.dargadgetz.com/ios-7-abstract-wallpaper-pack-for-iphone-5-and-ipod-touch-retina/
-comments: false
-modified: 2014-12-24
+modified: 2015-04-01
 ---
 
-They say three times the charm, so here is another free responsive Jekyll blog theme for you. I've learned a ton since open sourcing my first two themes [on Github](http://github.com/mmistakes), and wanted to try a few new things this time around. 
+Swearjure is a turing complete subset of Clojure that only uses
+non-alphanumerics. 
 
-If you've used any of [my other themes](http://mademistakes.com/work/jekyll-themes/) most of this should be familiar territory...
+### History
 
-## What HPSTR brings to the table:
+[Gary Fredericks](https://github.com/gfredericks) and
+[Tim McCormack](https://github.com/timmc) were the first to question and discuss
+how expressive Clojure would be without alphanumerics, in the
+[#clojure](http://clojure-log.n01se.net/date/2011-04-06.html#19:04) channel on
+Freenode. The name Swearjure was coined in IRC as well, and became a way of
+referring to using Clojure without alphanumerics around November 2012.
 
-* Responsive templates for post, page, and post index `_layouts`. Looks great on mobile, tablet, and desktop devices.
-* Gracefully degrads in older browsers. Compatible with Internet Explorer 8+ and all modern browsers.  
-* Modern and minimal design.
-* Sweet animated menu.
-* Background image support.
-* Readable typography to make your words shine.
-* Support for large images to call out your favorite posts.
-* Built-in support for Sass courtesy of Jekyll 2.x.
-* Optional [Disqus](http://disqus.com) comments.
-* Simple and clear permalink structure[^1].
-* [Open Graph](https://developers.facebook.com/docs/opengraph/) and [Twitter Cards](https://dev.twitter.com/docs/cards) support for a better social sharing experience.
-* Simple [custom 404 page]({{ site.url }}/404.html) to get you started.
-* Stylesheets for Pygments and Coderay [syntax highlighting]({{ site.url }}/code-highlighting-post/) to make your code examples look snazzy.
+Since then, there has been ongoing work on improving the usability of Swearjure.
+Turing completeness was in fact
+[proven](http://hypirion.com/musings/swearjure-is-turing-complete) late January
+2015, by Alex Engelberg and Jean Niklas L'orange independently of each other.
+The turing completeness capabilities was accidentally brought in by Gary
+Fredericks through [CLJ-1121](http://dev.clojure.org/jira/browse/CLJ-1121).
 
-<div markdown="0"><a href="{{ site.url }}/theme-setup/" class="btn btn-info">Theme Setup</a> <a href="https://github.com/mmistakes/hpstr-jekyll-theme" class="btn btn-success">Download HPSTR</a></div>
+### Implementation
 
-[^1]: Example: *domain.com/category-name/post-title*
+The Swearjure implementation was designed to explore the functionality of the
+Clojure reader, which has curious edge cases. Some of them can be abused in
+Swearjure to gain additional power. For instance, the syntax quote reader can be
+abused to create hash maps of arbitrary length:
+
+{% highlight clojure %}
+(defn my-hash-map [& values]
+  `{~@values ~@()})
+{% endhighlight %}
+
+And quoted arguments to function literals yield gensyms:
+
+{% highlight clojure %}
+user=> (#(identity '%) :foo)
+p1__771#
+{% endhighlight %}
+
+
+After long waiting times to verify correctness, the author decided to make a
+fully functional Swearjure REPL to lower feedback time. From there on, the
+project quickly grew out of control, and is now a more or less fully usable
+Clojure implementation[^1].
+
+[^1]: Without alphanumeric characters in input expressions.
