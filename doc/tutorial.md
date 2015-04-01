@@ -58,13 +58,14 @@ $ echo '[(*) (+)] ({* +} -)' | ./swearjure
 $
 ```
 
-Finally, Swearjure might take an input file to evaluate. This behaves exactly as
-if the input file was piped in from stdin:
+Finally, Swearjure might take an input file to evaluate. This behaves almost
+exactly as if the input file was piped in from stdin (the only difference is
+that you now can use I/O from stdin, see below):
 
 ```bash
 $ ./swearjure examples/hello-world.clj
 Hello World!
-# Which is equivalent to:
+# Which in this case is equivalent to:
 $ cat examples/hello-world.clj | ./swearjure
 Hello World!
 ```
@@ -74,7 +75,7 @@ with the `-h` or `--help` flag:
 
 ```bash
 ./swearjure -h
-Swearjure, version (+).(*).(+)-SNAPSHOT (aka 0.1.0-SNAPSHOT)
+Swearjure, version (*).(+).(+) (aka 1.0.0)
 ```
 
 ## Numbers
@@ -83,11 +84,9 @@ The most essential type of value in Swearjure is an integer. Let's make some:
 
 ```clojure
 swj> 10
-(line 1, column 2):
-Alphanumeric characters are not allowed
+Failed reading: Alphanumeric characters are not allowed
 swj> 0
-(line 1, column 2):
-Alphanumeric characters are not allowed
+Failed reading: Alphanumeric characters are not allowed
 ```
 
 Oh, right. In Swearjure, you're not allowed to use any alphanumeric characters
@@ -399,8 +398,7 @@ Cast exception: Integer cannot be cast to IFn
 swj> (#(%&) (*))
 Cast exception: PersistentList cannot be cast to IFn
 swj> (#(+ % (#(+ % %) %)) (*))
-(line 1, column 11):
-Nested #() are not allowed
+Failed reading: Nested #() are not allowed
 ```
 
 We only have two literals available: We can use `%`, `%&`, or both. Of course,
@@ -650,9 +648,9 @@ baz
 In theory, we can implement a crippled variant of `prn` and `read` with `>>'`
 and `<<'`!
 
-To avoid redoing that work all the time, Swearjure also ships with the functions
-`>>` and `<<`. `>>` works the same as the output from a Swearjure repl, whereas
-`<<` is a bit "cheaty", and is more or less equivalent to `read`.
+To avoid implementing `prn` all the time, Swearjure also ships with `>>`. `>>`
+prints the same as output as you see in a Swearjure repl. `<<`, Swearjure's
+`read`, is currently left as an exercise to the reader.
 
 ### Compatibility with Other Clojure Versions
 
@@ -668,7 +666,6 @@ Clojure itself:
 ```clj
 #@?(:?!$ []
     :clj [(def >> prn)
-          (def << read)
           (defn >>' [& vals]
             (doseq [val vals]
               (.print System/out (char val))))
