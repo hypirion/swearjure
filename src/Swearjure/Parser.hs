@@ -6,6 +6,7 @@ module Swearjure.Parser
        ( PValF(..)
        , PVal
        , readAsts
+       , readStatic
        , ParseResult(..)
        , feedCont
        ) where
@@ -13,12 +14,14 @@ module Swearjure.Parser
 import           Control.Applicative hiding (many)
 import           Control.Monad.Reader
 import           Data.Attoparsec.Text
+import qualified Data.Attoparsec.Text.Lazy as L
 import           Data.Char (isAlphaNum)
 import           Data.Foldable (Foldable)
 import           Data.Generics.Fixplate (Mu(..), ShowF(..), EqF(..), OrdF(..))
 import           Data.Sequence
 import qualified Data.Sequence as S
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as B
 import           Data.Traversable (Traversable)
 import           Swearjure.Errors
 
@@ -232,3 +235,17 @@ readAsts s | justWS s = Results S.empty s
 readAsts s = foo $ readRec $ parse (whiteSpace >> expr) (T.pack $ s ++ "\n")
   where foo (vals, Nothing) = Results vals s
         foo (vals, Just cont) = Continuation vals s cont
+
+-- difference between readStatic and readAsts is that readStatic is incremental,
+-- and won't give back continuations. Consequently it just gobbles until it's
+-- done. Passes back a list to avoid the strictness we get with Sequences.
+readStatic :: B.Text -> [Either SwjError PVal]
+readStatic s | lazyWS s = []
+readStatic s = go $ L.parse (whiteSpace >> expr) s
+  where go (L.Fail _ _ err) = [Left $ SyntaxError err]
+        go (L.Done txt r) = Right r : readStatic txt
+
+lazyWS :: B.Text -> Bool
+lazyWS s = case L.parse whiteSpace s of
+            (L.Fail _ _ _) -> False
+            (L.Done txt ()) -> B.null txt

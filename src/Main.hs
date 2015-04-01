@@ -6,13 +6,12 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Foldable (toList)
-import           Data.Generics.Fixplate (Mu(..))
 import           Data.Sequence
 import qualified Data.Sequence as S
--- import qualified Data.Traversable as T
+import qualified Data.Text.Lazy as B
 import           Filesystem hiding (readFile, writeFile)
 import           Filesystem.Path.CurrentOS
-import           Swearjure.AST (prStr, Val, EvalState, SwjValF(EVec), _nil)
+import           Swearjure.AST (prStr, Val, EvalState, _nil)
 import           Swearjure.Errors
 import           Swearjure.Eval (initEnv, eval)
 import           Swearjure.Parser
@@ -39,12 +38,27 @@ main = do args <- getArgs
 banner :: IO ()
 banner = putStrLn "Swearjure, version (+).(*).(+)-SNAPSHOT (aka 0.1.0-SNAPSHOT)"
 
+-- Since attoparsec
 static :: String -> IO ()
-static input = do let wrap = '[' : input ++ "]"
-                  ev <- staticEval wrap
-                  case ev of
-                   Just s  -> putStrLn s
-                   Nothing -> return ()
+static input = staticRep 1 (readStatic $ B.pack input)
+
+staticRep :: Int -> [Either SwjError PVal] -> IO ()
+staticRep _ [] = return ()
+staticRep n [x]
+  = do res <- staticEval n x
+       case res of
+        Left err -> putStrLn $ errString err
+        Right (v, _) | v == _nil -> return ()
+        Right (v, _) -> putStrLn (prStr v)
+staticRep n (x : xs)
+  = do res <- staticEval n x
+       case res of
+        Left err -> putStrLn $ errString err
+        Right (_, n') -> staticRep n' xs
+
+staticEval :: Int -> Either SwjError PVal -> IO (Either SwjError (Val, Int))
+staticEval n (Right pval) = runExceptT (runStateT (runReaderT (doEval pval) initEnv) n)
+staticEval _ (Left err) = return $ Left err
 
 interactive :: IO ()
 interactive = do hist <- readHistory
@@ -64,7 +78,7 @@ loop gsymCount
               Nothing -> teardown
               Just val -> loop val
 
--- returns nothing if we end
+-- returns nothing if we pass in C-d
 feedLoop :: Int -> ParseResult -> StateT (Seq String) IO (Maybe Int)
 feedLoop gsymCount (Results rseq str)
   = do liftIO $ addHistory str
@@ -88,21 +102,8 @@ rep n (Right pval)
         Right (x, n') -> do putStrLn $ prStr x
                             return n'
 
--- return last element of the vec
-staticEval :: String -> IO (Maybe String)
-staticEval s = do res <- runExceptT (runStateT (runReaderT (maybeEval s) initEnv) 1)
-                  case res of
-                   Left err -> return $ Just $ errString err
-                   Right (Just (Fix (EVec xs)), _)
-                     | last xs /= _nil -> return $ Just $ prStr (last xs)
-                   Right (Just _, _) -> return Nothing
-                   Right (Nothing, _) -> return Nothing
-
 doEval :: PVal -> EvalState Val
 doEval pval = readVal pval >>= eval
-
-maybeEval :: String -> EvalState (Maybe Val)
-maybeEval _ = undefined --readVal s >>= T.mapM eval
 
 readHistory :: IO (Seq String)
 readHistory = do hdir <- getAppDataDirectory "swearjure"
