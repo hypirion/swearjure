@@ -32,6 +32,7 @@ initEnv = Toplevel $ M.fromList $ map
           , ("apply", apply)
           , ("seq", liftM (Fix . EList) . seq)
           , ("concat", liftM (Fix . EList) . concat)
+          , ("deref", deref)
           , ("hash-map", hashMap)
           , ("hash-set", hashSet)
           , ("<", lt)
@@ -224,6 +225,7 @@ ifn = go . unFix
         go v@(EVec _) = lookup1 v
         go s@(ESet _) = lookup1 s
         go hm@(EHM _) = lookup12 hm
+        -- TODO: When dereffed, this prints badly.
         go (EVar f True) = unnamedPrim -- this always throws arity exceptions
                            (\x -> throwError $ ArityException (length x)
                                   (prStr $ Fix $ EFn f)) -- TODO: Not printed correctly.
@@ -235,6 +237,13 @@ ifn = go . unFix
         lookup12 hm = unnamedPrim $ getFn . (Fix hm :)
         lookup1 x = unnamedPrim $ get1Fn . (Fix x :)
         unnamedPrim = return . PrimFn . Prim ("", "")
+
+-- I'd usually put this in prims, but deref needs to convert val through ifn
+deref :: [Val] -> EvalState Val
+deref [f@(Fix (EVar _ _))] = Fix . EFn <$> (ifn f)
+deref [x] = throwError $ CastException (typeName x) "java.util.concurrent.Future"
+deref x = throwError $ ArityException (length x) "core/deref"
+
 
 checkDupe :: [Val] -> EvalState ()
 checkDupe = go S.empty
