@@ -25,6 +25,8 @@ import qualified Data.Text.Lazy as B
 import           Data.Traversable (Traversable)
 import           Swearjure.Errors
 
+type ParseState = Bool
+
 data PValF p = PSym String
              | PString String
              | PKw String
@@ -59,21 +61,21 @@ commentLine :: Parser String
 commentLine = skipMany1 semi >> manyTill anyChar (endOfLine <|> endOfInput)
 
 -- | Filters out any kind of whitespace.
-whiteSpace :: Parser ()
-whiteSpace = skipMany (omit (char ',') <|> omit space <|> omit commentLine
-                       <|> try sharpWhites)
+whiteSpace :: ParseState -> Parser ()
+whiteSpace b = skipMany (omit (char ',') <|> omit space <|> omit commentLine
+                         <|> try (sharpWhites b))
 
-sharpWhites :: Parser ()
-sharpWhites = char '#' >> (sharp_ <|> sharpBang)
+sharpWhites :: ParseState -> Parser ()
+sharpWhites b = char '#' >> (sharp_ b <|> sharpBang)
 
-sharp_ :: Parser ()
-sharp_ = char '_' >> omit expr
+sharp_ :: ParseState -> Parser ()
+sharp_ b = char '_' >> omit (expr b)
 
 sharpBang :: Parser ()
 sharpBang = char '!' >> manyTill anyChar (endOfLine <|> endOfInput) >> return ()
 
-lexeme :: Parser p -> Parser p
-lexeme p = whiteSpace >> p
+lexeme :: Parser p -> ParseState -> Parser p
+lexeme p b = whiteSpace b >> p
 
 anyOf :: String -> Parser Char
 anyOf = satisfy . inClass
@@ -103,8 +105,8 @@ keyword = char ':' >> (nonQual <|> qual <|> alphaNums)
 between :: Parser open -> Parser close -> Parser a -> Parser a
 between open close p = do { omit open; v <- p; omit close; return v }
 
-sjwString :: Parser PVal
-sjwString = Fix . PString <$> (between (char '"') (char '"')
+swjString :: Parser PVal
+swjString = Fix . PString <$> (between (char '"') (char '"')
                                (many' stringChar))
   where stringChar = stringLetter <|> stringEscape
                      <?> "string character (non-alphanumeric)"
@@ -112,47 +114,47 @@ sjwString = Fix . PString <$> (between (char '"') (char '"')
         -- Todo: Fix this properly?
         stringEscape = char '\\' >> anyOf "\\\""
 
-delimited :: Char -> Char -> Parser c -> Parser c
-delimited start stop = between (char start) (lexeme $ char stop)
+delimited :: Char -> Char -> Parser c -> ParseState -> Parser c
+delimited start stop p b = between (char start) (lexeme (char stop) b) p
 
-list :: Parser PVal
-list = Fix . PList <$> delimited '(' ')' (many' expr)
+list :: ParseState -> Parser PVal
+list b = Fix . PList <$> delimited '(' ')' (many' $ expr b) b
 
-vec :: Parser PVal
-vec = Fix . PVec <$> delimited '[' ']' (many' expr)
+vec :: ParseState -> Parser PVal
+vec b = Fix . PVec <$> delimited '[' ']' (many' $ expr b) b
 
-hashMap :: Parser PVal
-hashMap = Fix . PHM <$> delimited '{' '}' (many' pair)
-  where pair = (,) <$> expr <*> expr
+hashMap :: ParseState -> Parser PVal
+hashMap b = Fix . PHM <$> delimited '{' '}' (many' pair) b
+  where pair = (,) <$> expr b <*> expr b
 
 call :: String -> [PVal] -> PVal
 call s es = Fix . PList $ (Fix . PSym) s : es
 
-sugared :: Char -> String -> Parser PVal
-sugared c s = do omit (char c)
-                 e <- expr
-                 return $ call (cljns ++ s) [e]
+sugared :: Char -> String -> ParseState -> Parser PVal
+sugared c s b = do omit (char c)
+                   e <- expr b
+                   return $ call (cljns ++ s) [e]
 
-quote :: Parser PVal
-quote = do omit (char '\'')
-           e <- expr
-           return $ call "quote" [e]
+quote :: ParseState -> Parser PVal
+quote b = do omit (char '\'')
+             e <- expr b
+             return $ call "quote" [e]
 
-syntaxQuote :: Parser PVal
-syntaxQuote = char '`' >> (Fix . PSyntaxQuote <$> expr)
+syntaxQuote :: ParseState -> Parser PVal
+syntaxQuote b = char '`' >> (Fix . PSyntaxQuote <$> expr b)
 
-deref :: Parser PVal
+deref :: ParseState -> Parser PVal
 deref = sugared '@' "deref"
 
 optionMaybe :: Parser p -> Parser (Maybe p)
 optionMaybe p = option Nothing (liftM Just p)
 
 -- this needs a bit of help to avoid turning ~@foo into (unquote (deref foo))
-unquote :: Parser PVal
-unquote = do omit $ char '~'
-             splice <- optionMaybe $ char '@'
-             e <- expr
-             return $ call (unquoteType splice) [e]
+unquote :: ParseState -> Parser PVal
+unquote b = do omit $ char '~'
+               splice <- optionMaybe $ char '@'
+               e <- expr b
+               return $ call (unquoteType splice) [e]
   where unquoteType (Just _) = cljns ++ "unquote-splicing"
         unquoteType Nothing = cljns ++ "unquote"
 
@@ -165,30 +167,30 @@ unquote = do omit $ char '~'
 
 -- sharpies be here
 
-sharp :: Parser PVal
-sharp = char '#' >> (sharpQuote <|> set <|> fnLit False <|> unreadable)
+sharp :: ParseState -> Parser PVal
+sharp b = char '#' >> (sharpQuote b <|> set b <|> fnLit b <|> unreadable)
 
-sharpQuote :: Parser PVal
-sharpQuote =  do omit (char '\'')
-                 e <- expr
-                 return $ call "var" [e]
+sharpQuote :: ParseState -> Parser PVal
+sharpQuote b = do omit (char '\'')
+                  e <- expr b
+                  return $ call "var" [e]
 
 -- must propagate the Bool over the affected results
-fnLit :: Bool -> Parser PVal
+fnLit :: ParseState -> Parser PVal
 fnLit True = fail "Nested #() are not allowed"
 fnLit False = do omit $ char '('
-                 exps <- many' expr
+                 exps <- many' (expr True)
                  omit $ char ')'
                  return $ Fix $ PFnLit exps
 
-set :: Parser PVal
-set = Fix . PSet <$> delimited '{' '}' (many' expr)
+set :: ParseState -> Parser PVal
+set b = Fix . PSet <$> delimited '{' '}' (many' $ expr b) b
 
 unreadable :: Parser a
 unreadable = char '<' >> fail "Unreadable form"
 
 -- TODO: #=
--- and #?
+-- TODO: #@? and #?
 
 character :: Parser PVal
 character = char '\\' >> (Fix . PChar <$> satisfy (not . isAlphaNum))
@@ -196,15 +198,16 @@ character = char '\\' >> (Fix . PChar <$> satisfy (not . isAlphaNum))
 alphaNums :: Parser a
 alphaNums = satisfy isAlphaNum >> fail "Alphanumeric characters are not allowed"
 
-expr :: Parser PVal
-expr = do whiteSpace
-          list <|> vec <|> symbol <|> keyword <|> sjwString <|> hashMap
-            <|> quote <|> syntaxQuote <|> deref <|> unquote <|> sharp <|>
-            character <|> alphaNums
+expr :: Bool -> Parser PVal
+expr b
+  = do whiteSpace b
+       list b <|> vec b <|> symbol <|> keyword <|> swjString <|> hashMap b
+         <|> quote b <|> syntaxQuote b <|> deref b <|> unquote b <|> sharp b <|>
+         character <|> alphaNums
 
 justWS :: String -> Bool
 justWS s
-  = case parse whiteSpace (T.pack s) of
+  = case parse (whiteSpace False) (T.pack s) of
      (Fail _ _ _) -> False
      (Partial _) -> True
      (Done txt ()) -> T.null txt
@@ -229,12 +232,12 @@ readRec (Fail _ _ err) = (S.singleton $ Left $ SyntaxError err, Nothing)
 readRec (Partial cont) = (S.empty, Just cont)
 readRec (Done txt r) | justWS (T.unpack txt) = (S.singleton $ Right r, Nothing)
 readRec (Done txt r) = recur deeper
-  where deeper = readRec $ parse (whiteSpace >> expr) txt
+  where deeper = readRec $ parse (whiteSpace False >> expr False) txt
         recur (x, y) = (Right r <| x, y)
 
 readAsts :: String -> ParseResult
 readAsts s | justWS s = Results S.empty s
-readAsts s = foo $ readRec $ parse (whiteSpace >> expr) (T.pack $ s ++ "\n")
+readAsts s = foo $ readRec $ parse (whiteSpace False >> expr False) (T.pack $ s ++ "\n")
   where foo (vals, Nothing) = Results vals s
         foo (vals, Just cont) = Continuation vals s cont
 
@@ -243,11 +246,11 @@ readAsts s = foo $ readRec $ parse (whiteSpace >> expr) (T.pack $ s ++ "\n")
 -- done. Passes back a list to avoid the strictness we get with Sequences.
 readStatic :: B.Text -> [Either SwjError PVal]
 readStatic s | lazyWS s = []
-readStatic s = go $ L.parse (whiteSpace >> expr) s
+readStatic s = go $ L.parse (whiteSpace False >> expr False) s
   where go (L.Fail _ _ err) = [Left $ SyntaxError err]
         go (L.Done txt r) = Right r : readStatic txt
 
 lazyWS :: B.Text -> Bool
-lazyWS s = case L.parse whiteSpace s of
+lazyWS s = case L.parse (whiteSpace False) s of
             (L.Fail _ _ _) -> False
             (L.Done txt ()) -> B.null txt

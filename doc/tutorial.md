@@ -16,6 +16,7 @@ Swearjure up and running:
 ```bash
 git clone https://github.com/hypirion/swearjure.git
 cd swearjure
+git checkout 1.0.0
 cabal sandbox init
 cabal install
 cp .cabal-sandbox/bin/swearjure swearjure
@@ -398,7 +399,7 @@ Cast exception: Integer cannot be cast to IFn
 swj> (#(%&) (*))
 Cast exception: PersistentList cannot be cast to IFn
 swj> (#(+ % (#(+ % %) %)) (*))
-Failed reading: Nested #() are not allowed
+Failed reading: satisfy
 ```
 
 We only have two literals available: We can use `%`, `%&`, or both. Of course,
@@ -486,12 +487,11 @@ macroexpansion – so in fact, the last expansion works like this:
 => (fn* [] () :+)
 ```
 
-Remember the nested functions problem? We can now circumvent that problem:
+Remember the nested functions problem? We can now circumvent that:
 
 ```clojure
 swj> #(#())
-(line 1, column 5):
-Nested #() are not allowed
+Failed reading: satisfy
 swj> ;; line below turns into (fn* [] () (fn* [] ()))
 swj> (->> #() #())
 #<user$eval13$fn__14>
@@ -652,7 +652,7 @@ To avoid implementing `prn` all the time, Swearjure also ships with `>>`. `>>`
 prints the same as output as you see in a Swearjure repl. `<<`, Swearjure's
 `read`, is currently left as an exercise to the reader.
 
-### Compatibility with Other Clojure Versions
+### Compatibility with Other Clojure Versions (For 1.1.0)
 
 The functions provided above are somewhat problematic if you want to write
 portable code. `>>` and friends are not defined in Clojure or ClojureScript, so
