@@ -31,8 +31,16 @@ path, you can just cp it like so:
 cp swearjure ~/bin/
 ```
 
+If you already have `~/.cabal/bin` on your path, you might be able to just do
+
+```bash
+cabal update && cabal install swearjure
+```
+
 (You might have to reopen your shell to have make it available, as everything on
 `$PATH` is usually cached)
+
+
 
 ### Usage
 
