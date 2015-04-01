@@ -9,12 +9,13 @@ import           Data.Foldable (toList)
 import           Data.Generics.Fixplate (Mu(..))
 import           Data.Sequence
 import qualified Data.Sequence as S
-import qualified Data.Traversable as T
+-- import qualified Data.Traversable as T
 import           Filesystem hiding (readFile, writeFile)
 import           Filesystem.Path.CurrentOS
 import           Swearjure.AST (prStr, Val, EvalState, SwjValF(EVec), _nil)
 import           Swearjure.Errors
 import           Swearjure.Eval (initEnv, eval)
+import           Swearjure.Parser
 import           Swearjure.Reader
 import           System.Console.Readline (readline, addHistory)
 import           System.Environment
@@ -49,27 +50,43 @@ interactive :: IO ()
 interactive = do hist <- readHistory
                  void $ runStateT (loop 1) hist
 
+teardown :: StateT (Seq String) IO ()
+teardown = get >>= liftIO . writeHistory >> return ()
+
 loop :: Int -> StateT (Seq String) IO ()
 loop gsymCount
   = do input <- liftIO $ readline "swj> "
        case input of
-        Nothing -> do get >>= liftIO . writeHistory
-                      return ()
+        Nothing -> teardown
         Just str ->
-          do liftIO $ addHistory str
-             modify (|> str)
-             (res, symCount) <- liftIO $ re gsymCount str
-             case res of
-              Just x -> liftIO $ putStrLn x
-              Nothing -> return ()
-             loop symCount
+          do newGsym <- feedLoop gsymCount (readAsts str)
+             case newGsym of
+              Nothing -> teardown
+              Just val -> loop val
 
-re :: Int -> String -> IO (Maybe String, Int)
-re n s = do res <- runExceptT (runStateT (runReaderT (maybeEval s) initEnv) n)
-            case res of
-             Left err -> return (Just $ errString err, n)
-             Right (Just x, n') -> return (Just $ prStr x, n')
-             Right (Nothing, n') -> return (Nothing, n')
+-- returns nothing if we end
+feedLoop :: Int -> ParseResult -> StateT (Seq String) IO (Maybe Int)
+feedLoop gsymCount (Results rseq str)
+  = do liftIO $ addHistory str
+       modify (|> str)
+       n' <- liftIO $ foldM rep gsymCount $ toList rseq
+       return $ Just n'
+feedLoop gsymCount (Continuation rseq accum cont)
+  = do input <- liftIO $ readline "#_=> "
+       case input of
+        Nothing -> return Nothing
+        Just str -> feedLoop gsymCount $ feedCont str rseq accum cont
+
+rep :: Int -> Either SwjError PVal -> IO Int
+rep n (Left err) = do putStrLn $ errString err
+                      return n
+rep n (Right pval)
+  = do res <- runExceptT (runStateT (runReaderT (doEval pval) initEnv) n)
+       case res of
+        Left err -> do putStrLn $ errString err
+                       return n
+        Right (x, n') -> do putStrLn $ prStr x
+                            return n'
 
 -- return last element of the vec
 staticEval :: String -> IO (Maybe String)
@@ -81,8 +98,11 @@ staticEval s = do res <- runExceptT (runStateT (runReaderT (maybeEval s) initEnv
                    Right (Just _, _) -> return Nothing
                    Right (Nothing, _) -> return Nothing
 
+doEval :: PVal -> EvalState Val
+doEval pval = readVal pval >>= eval
+
 maybeEval :: String -> EvalState (Maybe Val)
-maybeEval s = readVal s >>= T.mapM eval
+maybeEval _ = undefined --readVal s >>= T.mapM eval
 
 readHistory :: IO (Seq String)
 readHistory = do hdir <- getAppDataDirectory "swearjure"

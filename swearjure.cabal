@@ -21,16 +21,17 @@ executable swearjure
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8
+                     , attoparsec >= 0.12
                      , containers >= 0.5
                      , fixplate >= 0.1
                      , mtl >= 2.2
-                     , parsec >= 3.1
                      , pretty >= 1.1
                      , random >= 1.1
                      , random-shuffle >= 0.0.4
                      , readline >= 1.0.3.0
                      , system-fileio >= 0.3
                      , system-filepath >= 0.4
+                     , text >= 1.2
   -- Have a look at linenoise later.
   hs-source-dirs:      src
   default-language:    Haskell2010

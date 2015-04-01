@@ -15,8 +15,8 @@ import           Swearjure.AST
 import           Swearjure.Errors
 import           Swearjure.Parser
 
-readVal :: String -> EvalState (Maybe Val)
-readVal str = readAst str >>= traverse replaceFnLits >>= traverse convertAst
+readVal :: PVal -> EvalState Val
+readVal ast = replaceFnLits ast >>= convertAst
 
 convertAst :: PVal -> EvalState Val
 convertAst = go

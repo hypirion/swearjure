@@ -2,9 +2,7 @@
 
 module Swearjure.Errors where
 
-import Text.ParserCombinators.Parsec (ParseError)
-
-data SwjError = SyntaxError ParseError
+data SwjError = SyntaxError String
               | IllegalState String
               | IllegalArgument String
               | ArityException Int String
@@ -13,7 +11,7 @@ data SwjError = SyntaxError ParseError
               deriving (Show)
 
 errString :: SwjError -> String
-errString (SyntaxError err) = show err
+errString (SyntaxError err) = err
 errString (IllegalState err) = "Illegal state: " ++ err
 errString (IllegalArgument err) = "Illegal argument: " ++ err
 errString (ArityException n fname) = "Wrong number of args (" ++ show n
